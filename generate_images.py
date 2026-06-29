@@ -46,7 +46,8 @@ from PIL import Image
 
 load_dotenv()
 
-TIMESTAMP_RE = re.compile(r"^\[(\d{2}:\d{2})\]\s*(.+)", re.MULTILINE)
+# Matches [MM:SS] or (M:SS) or (MM:SS) anywhere in the line
+TIMESTAMP_RE = re.compile(r"[\[\(](\d{1,2}:\d{2})[\]\)]")
 
 # Gemini Imagen models (use generate_images API)
 IMAGEN_MODELS = {
@@ -129,12 +130,28 @@ def load_api_key(env_var: str, label: str) -> str:
 
 def parse_narration(path: Path) -> list[dict]:
     text = path.read_text(encoding="utf-8")
+
+    # Find all timestamp positions and extract text between them
+    matches = list(TIMESTAMP_RE.finditer(text))
+    if not matches:
+        return []
+
     entries = []
-    for match in TIMESTAMP_RE.finditer(text):
-        entries.append({
-            "timestamp": match.group(1),
-            "narration": match.group(2).strip(),
-        })
+    for i, match in enumerate(matches):
+        ts = match.group(1).zfill(4)  # normalize "0:08" → "00:08", "1:06" → "01:06"
+        # Normalize to MM:SS
+        parts = ts.split(":")
+        ts_normalized = f"{int(parts[0]):02d}:{parts[1]}"
+
+        start = match.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        narration = text[start:end].strip()
+        # Clean up leading/trailing punctuation artifacts
+        narration = re.sub(r"\s+", " ", narration).strip()
+
+        if narration:
+            entries.append({"timestamp": ts_normalized, "narration": narration})
+
     return entries
 
 
