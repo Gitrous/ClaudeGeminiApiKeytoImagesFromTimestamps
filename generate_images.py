@@ -2,7 +2,7 @@
 Versocurio — Image Generator from Timestamped Narration
 Reads a plain timestamped narration file, builds an image prompt per line
 using Gemini text model, then generates one image per timestamp.
-API key loaded from .env — never hardcoded.
+API keys loaded from .env — never hardcoded.
 
 Usage:
     python generate_images.py narration.txt [--output ./output] [--model MODEL] [--characters NAMES]
@@ -13,31 +13,42 @@ Timestamped narration format (one line per timestamp):
     ...
 
 Available image models:
-    gemini-2.5-flash-image        — free tier (default)
-    nano-banana-pro-preview       — Versocurio channel model
-    gemini-3.1-flash-image        — stable release
-    imagen-4.0-generate-001       — best quality (paid plan required)
-    imagen-4.0-ultra-generate-001 — highest quality (paid plan required)
+    Hugging Face (HF_API_KEY required):
+    flux-schnell                  — FLUX.1-schnell, fast (default)
+    flux-dev                      — FLUX.1-dev, higher quality
+
+    Gemini native (GEMINI_API_KEY, free tier limited):
+    gemini-2.5-flash-image
+    nano-banana-pro-preview
+    gemini-3.1-flash-image
+
+    Imagen API (GEMINI_API_KEY, paid plan required):
+    imagen-4.0-generate-001
+    imagen-4.0-ultra-generate-001
 
 Character flags (comma-separated, default: all three):
     --characters gamer,mecanico,repartidor
 """
 
 import argparse
+import io
 import os
 import re
 import sys
 import time
 from pathlib import Path
 
+import requests
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from PIL import Image
 
 load_dotenv()
 
 TIMESTAMP_RE = re.compile(r"^\[(\d{2}:\d{2})\]\s*(.+)", re.MULTILINE)
 
+# Gemini Imagen models (use generate_images API)
 IMAGEN_MODELS = {
     "imagen-4.0-generate-001",
     "imagen-4.0-ultra-generate-001",
@@ -45,9 +56,17 @@ IMAGEN_MODELS = {
     "imagen-3.0-generate-002",
 }
 
-DEFAULT_MODEL = "gemini-2.5-flash-image"
+# Hugging Face model aliases → HF model IDs
+HF_MODELS = {
+    "flux-schnell": "black-forest-labs/FLUX.1-schnell",
+    "flux-dev":     "black-forest-labs/FLUX.1-dev",
+}
 
-# ─── Character reference strings (built from actual character designs) ────────
+DEFAULT_MODEL = "flux-schnell"
+
+HF_API_URL = "https://api-inference.huggingface.co/models/{model}"
+
+# ─── Character reference strings ─────────────────────────────────────────────
 
 CHARACTERS = {
     "gamer": (
@@ -98,12 +117,12 @@ If the narration line does not clearly indicate which character is present, use 
 """
 
 
-def load_api_key() -> str:
-    key = os.environ.get("GEMINI_API_KEY", "").strip()
+def load_api_key(env_var: str, label: str) -> str:
+    key = os.environ.get(env_var, "").strip()
     if not key:
         sys.exit(
-            "Error: GEMINI_API_KEY not set.\n"
-            "Copy .env.example to .env and add your key."
+            f"Error: {env_var} not set.\n"
+            f"Add your {label} key to .env: {env_var}=your_key_here"
         )
     return key
 
@@ -128,18 +147,71 @@ def build_image_prompt(
     narration: str,
     timestamp: str,
     character_refs: str,
+    max_retries: int = 5,
 ) -> str:
     system = SCENE_SYSTEM_PROMPT.format(character_refs=character_refs)
-    user_msg = f"[{timestamp}] {narration}"
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=user_msg,
-        config=types.GenerateContentConfig(
-            system_instruction=system,
-            temperature=0.7,
-        ),
-    )
-    return response.text.strip()
+    backoff = 15
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=f"[{timestamp}] {narration}",
+                config=types.GenerateContentConfig(
+                    system_instruction=system,
+                    temperature=0.7,
+                ),
+            )
+            return response.text.strip()
+        except Exception as exc:
+            msg = str(exc)
+            if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+                # extract suggested retry delay from error if present
+                m = re.search(r"retry in (\d+)", msg)
+                wait = int(m.group(1)) + 2 if m else backoff
+                print(f"\n           → rate limited, waiting {wait}s...", end=" ", flush=True)
+                time.sleep(wait)
+                backoff = min(backoff * 2, 120)
+            else:
+                raise
+    raise RuntimeError(f"Gemini prompt build failed after {max_retries} attempts.")
+
+
+# ─── Image backends ───────────────────────────────────────────────────────────
+
+def generate_via_hf(prompt: str, model_alias: str) -> bytes:
+    hf_key = load_api_key("HF_API_KEY", "Hugging Face")
+    model_id = HF_MODELS[model_alias]
+    url = HF_API_URL.format(model=model_id)
+    headers = {"Authorization": f"Bearer {hf_key}"}
+
+    # FLUX.1-schnell produces 1024×1024 by default; we crop/pad to 9:16 (576×1024)
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "width": 576,
+            "height": 1024,
+            "num_inference_steps": 4,   # schnell is optimized for 1-4 steps
+            "guidance_scale": 0.0,      # schnell requires 0 CFG
+        },
+    }
+
+    for attempt in range(3):
+        resp = requests.post(url, headers=headers, json=payload, timeout=120)
+
+        if resp.status_code == 200:
+            # Response is raw image bytes
+            return resp.content
+
+        if resp.status_code == 503:
+            # Model loading — wait and retry
+            wait = int(resp.headers.get("X-Wait-For-Model", "20"))
+            print(f"\n           → model loading, waiting {wait}s...", end=" ", flush=True)
+            time.sleep(wait)
+            continue
+
+        raise RuntimeError(f"HF API {resp.status_code}: {resp.text[:300]}")
+
+    raise RuntimeError("HF API failed after 3 attempts (model still loading).")
 
 
 def generate_via_imagen(client: genai.Client, prompt: str, model: str) -> bytes:
@@ -154,7 +226,7 @@ def generate_via_imagen(client: genai.Client, prompt: str, model: str) -> bytes:
     return response.generated_images[0].image.image_bytes
 
 
-def generate_via_gemini(client: genai.Client, prompt: str, model: str) -> bytes:
+def generate_via_gemini_native(client: genai.Client, prompt: str, model: str) -> bytes:
     response = client.models.generate_content(
         model=model,
         contents=prompt,
@@ -169,14 +241,18 @@ def generate_via_gemini(client: genai.Client, prompt: str, model: str) -> bytes:
 
 
 def generate_image(client: genai.Client, prompt: str, model: str) -> bytes:
+    if model in HF_MODELS:
+        return generate_via_hf(prompt, model)
     if model in IMAGEN_MODELS:
         return generate_via_imagen(client, prompt, model)
-    return generate_via_gemini(client, prompt, model)
+    return generate_via_gemini_native(client, prompt, model)
 
+
+# ─── Main ─────────────────────────────────────────────────────────────────────
 
 def run(narration_file: Path, output_dir: Path, model: str, character_names: list[str]) -> None:
-    api_key = load_api_key()
-    client = genai.Client(api_key=api_key)
+    gemini_key = load_api_key("GEMINI_API_KEY", "Gemini")
+    client = genai.Client(api_key=gemini_key)
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -194,12 +270,13 @@ def run(narration_file: Path, output_dir: Path, model: str, character_names: lis
 
     character_refs = "\n\n".join(CHARACTERS[n] for n in character_names)
 
-    print(f"Model      : {model}")
+    backend = "Hugging Face" if model in HF_MODELS else "Gemini"
+    print(f"Backend    : {backend}")
+    print(f"Model      : {model}{' (' + HF_MODELS[model] + ')' if model in HF_MODELS else ''}")
     print(f"Characters : {', '.join(character_names)}")
     print(f"Timestamps : {len(entries)}")
     print(f"Output     : {output_dir}/\n")
 
-    prompts_log = output_dir / "generated_prompts.txt"
     log_lines = []
 
     for i, entry in enumerate(entries, 1):
@@ -207,20 +284,21 @@ def run(narration_file: Path, output_dir: Path, model: str, character_names: lis
         narration = entry["narration"]
         out_path = output_dir / f"{slug(ts)}.png"
 
-        print(f"  [{i}/{len(entries)}] [{ts}] {narration[:60]}{'...' if len(narration) > 60 else ''}")
+        preview = narration[:60] + ("..." if len(narration) > 60 else "")
+        print(f"  [{i}/{len(entries)}] [{ts}] {preview}")
 
         if out_path.exists():
             print(f"           → already exists, skipping\n")
             continue
 
-        # Step 1: build image prompt from narration
+        # Step 1: build image prompt via Gemini text model
         print(f"           → building prompt...", end=" ", flush=True)
         try:
             image_prompt = build_image_prompt(client, narration, ts, character_refs)
             print("done")
             log_lines.append(f"[{ts}]\nNARRATION: {narration}\nPROMPT: {image_prompt}\n")
         except Exception as exc:
-            print(f"FAILED (prompt) — {exc}\n")
+            print(f"FAILED — {exc}\n")
             continue
 
         # Step 2: generate image
@@ -230,14 +308,15 @@ def run(narration_file: Path, output_dir: Path, model: str, character_names: lis
             out_path.write_bytes(image_bytes)
             print(f"saved → {out_path.name}\n")
         except Exception as exc:
-            print(f"FAILED (image) — {exc}\n")
+            print(f"FAILED — {exc}\n")
 
         if i < len(entries):
-            time.sleep(1.5)
+            time.sleep(1.0)
 
     if log_lines:
-        prompts_log.write_text("\n".join(log_lines), encoding="utf-8")
-        print(f"Prompts logged → {prompts_log}")
+        log_path = output_dir / "generated_prompts.txt"
+        log_path.write_text("\n".join(log_lines), encoding="utf-8")
+        print(f"Prompts logged → {log_path}")
 
     print("\nDone.")
 
@@ -260,12 +339,16 @@ def main() -> None:
     parser.add_argument(
         "--model",
         default=DEFAULT_MODEL,
-        help=f"Gemini image model (default: {DEFAULT_MODEL})",
+        help=(
+            f"Image model to use (default: {DEFAULT_MODEL}). "
+            "HF options: flux-schnell, flux-dev. "
+            "Gemini options: gemini-2.5-flash-image, imagen-4.0-generate-001."
+        ),
     )
     parser.add_argument(
         "--characters",
         default="gamer,mecanico,repartidor",
-        help="Comma-separated character names to include: gamer, mecanico, repartidor (default: all three)",
+        help="Comma-separated character names: gamer, mecanico, repartidor (default: all three)",
     )
     args = parser.parse_args()
 
