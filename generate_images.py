@@ -30,22 +30,55 @@ except ImportError:
     sys.exit(1)
 
 
-SKELETON_STYLE = (
-    "voxel art style, green translucent skeleton character with blue jacket, "
-    "skull head with black headphones, pixel art aesthetic, 3D rendered, "
-    "vibrant colors, dark humorous tone, YouTube Shorts vertical format 9:16"
+BASE_SKELETON_STYLE = (
+    "voxel art 3D render, green translucent skeleton body, white skull head with hollow eyes, "
+    "VERSOCURIO logo on chest, vibrant colors, dramatic lighting, dark humor tone, "
+    "vertical 9:16 format, YouTube Shorts style"
 )
 
-PROMPT_SYSTEM = """Eres un director de arte para un canal de YouTube Shorts viral llamado VERSOCURIO.
-El canal trata sobre curiosidades históricas y relatos narrados por un esqueleto verde animado.
+# The 3 recurring characters of the channel
+CHARACTERS = {
+    "tactico": (
+        "skeleton wearing dark gray tactical jacket with multiple pockets and tools, "
+        "utility belt, wrench and gadgets visible"
+    ),
+    "deportivo": (
+        "skeleton wearing red and white varsity letterman jacket, "
+        "athletic style, bold red sleeves"
+    ),
+    "formal": (
+        "skeleton wearing navy blue suit jacket with matching tie, "
+        "white dress shirt, name badge on chest"
+    ),
+}
+
+CHARACTERS_DESCRIPTION = """Los 3 personajes fijos del canal VERSOCURIO son siempre esqueletos verdes con cráneo blanco:
+- Esqueleto Táctico: chaqueta gris oscura con herramientas y bolsillos de utilidad
+- Esqueleto Deportivo: chaqueta varsity roja y blanca estilo atlético
+- Esqueleto Formal: traje azul marino con corbata azul y camisa blanca
+Todos tienen el logo VERSOCURIO en el pecho y cuerpo de esqueleto verde translúcido."""
+
+PROMPT_SYSTEM = f"""Eres un director de arte para un canal de YouTube Shorts viral llamado VERSOCURIO.
+El canal narra curiosidades y competencias entre personajes históricos.
+Los 3 protagonistas siempre presentes son esqueletos verdes con diferentes atuendos:
+
+{CHARACTERS_DESCRIPTION}
+
 Para cada escena descrita, crea un prompt de imagen en inglés que:
-1. Incluya al personaje esqueleto verde como narrador/presentador en escena
-2. Muestre visualmente el contenido de la escena
-3. Sea dramático y llamativo para captar atención en los primeros segundos
-4. Use estilo voxel art 3D, colores vibrantes
-5. Sea adecuado para formato vertical 9:16 (YouTube Shorts)
+1. Muestre los 3 esqueletos VERSOCURIO interactuando en la escena (táctic, deportivo y formal)
+2. Represente visualmente la acción descrita de forma dramática y exagerada
+3. Sea llamativo para captar atención en los primeros 2 segundos de un Short
+4. Use estilo voxel art 3D, colores vibrantes, iluminación dramática
+5. Formato vertical 9:16
 
 Responde SOLO con el prompt en inglés, sin explicaciones adicionales."""
+
+
+def build_full_prompt(image_prompt: str) -> str:
+    chars = (
+        f"{CHARACTERS['tactico']}, {CHARACTERS['deportivo']}, {CHARACTERS['formal']}"
+    )
+    return f"{image_prompt}, three green skeleton characters: {chars}, {BASE_SKELETON_STYLE}"
 
 
 def parse_timestamps(filepath: str) -> list[dict]:
@@ -85,7 +118,7 @@ def generate_image_prompt(client: genai.Client, scene_text: str) -> str:
 
 def generate_image(client: genai.Client, prompt: str, output_path: str) -> bool:
     """Generate an image using Imagen 3 and save it."""
-    full_prompt = f"{prompt}, {SKELETON_STYLE}"
+    full_prompt = build_full_prompt(prompt)
 
     response = client.models.generate_images(
         model='imagen-3.0-generate-002',
