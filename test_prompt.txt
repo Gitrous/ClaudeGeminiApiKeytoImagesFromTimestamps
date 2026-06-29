@@ -1,6 +1,9 @@
-[00:00] STATIC
-NANO BANANA 2: voxel/Minecraft-style blocky 3D render, skeleton character with white blocky skull head, black hollow square eye sockets, green skeletal ribcage and limbs, wearing flat red hoodie, standing arms-up in victory pose, simple flat gray floor background, 9:16 vertical aspect ratio, YouTube Shorts format, saturated colors, crisp voxel render, no gradients, no photorealism, no organic shapes, no hand-drawn style.
-
-[00:04] ANIMATED
-NANO BANANA 2 (FIRST FRAME): voxel/Minecraft-style blocky 3D render, skeleton character with white blocky skull head, black hollow square eye sockets, green skeletal ribcage and limbs, wearing flat blue gaming chair, leaning forward urgent pose, glowing monitor in background, 9:16 vertical aspect ratio, YouTube Shorts format, saturated colors, crisp voxel render, no gradients, no photorealism, no organic shapes, no hand-drawn style.
-VEO 3: Starting from a voxel/Minecraft-style 3D still frame of skeleton gamer leaning toward monitor, character leans further forward with arms outstretched in panic, camera pushes in slowly, comedic frantic energy. Duration: 5-8 seconds. Maintain voxel/Minecraft-style blocky 3D aesthetic throughout. No morphing into realistic or organic style.
+[00:00] ¿Qué pasaría si el Gamer, el Mecánico y el Repartidor tuvieran que sobrevivir sin internet por una semana?
+[00:04] Para el Gamer, el día uno fue un desastre total.
+[00:07] El Mecánico pensó que era su oportunidad de arreglar todo lo que había ignorado.
+[00:11] El Repartidor, sin GPS, empezó a perderse en su propio vecindario.
+[00:15] Al tercer día, los tres se reunieron. Nadie hablaba. Solo miraban la pantalla apagada.
+[00:20] El Gamer intentó jugar ajedrez. Duró cuatro minutos.
+[00:24] El Mecánico armó una antena con piezas de su taller. No funcionó.
+[00:28] El Repartidor encontró un mapa de papel del año 2003.
+[00:32] Al séptimo día, cuando volvió el internet, los tres lloraron. Pero algo había cambiado para siempre.
