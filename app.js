@@ -12,7 +12,8 @@
     imageModel: $('#imageModel'), textModel: $('#textModel'), aspect: $('#aspect'),
     concurrency: $('#concurrency'), enhance: $('#enhance'), noText: $('#noText'),
     loadModels: $('#loadModels'), modelsStatus: $('#modelsStatus'),
-    style: $('#style'), characters: $('#characters'), addChar: $('#addChar'),
+    style: $('#style'), stylePresets: $('#stylePresets'), presetPrompt: $('#presetPrompt'),
+    styleLabel: $('#styleLabel'), characters: $('#characters'), addChar: $('#addChar'),
     exportCfg: $('#exportCfg'), importCfg: $('#importCfg'),
     script: $('#script'), preview: $('#preview'), generate: $('#generate'), stop: $('#stop'),
     downloadAll: $('#downloadAll'), progress: $('#progress'), results: $('#results'),
@@ -21,6 +22,7 @@
   /** @type {{name:string, aliases:string, desc:string, always:boolean, refs:{mimeType:string,data:string}[]}[]} */
   let characters = [];
   let jobs = [];
+  let stylePreset = 'custom';
   let abort = null;
 
   // ---------- storage ----------
@@ -32,6 +34,7 @@
 
   function currentConfig() {
     return {
+      stylePreset,
       style: els.style.value,
       imageModel: els.imageModel.value.trim(),
       textModel: els.textModel.value.trim(),
@@ -47,6 +50,8 @@
   function applyConfig(cfg) {
     if (!cfg) return;
     if (cfg.style != null) els.style.value = cfg.style;
+    stylePreset = STYLE_PRESETS.some((p) => p.id === cfg.stylePreset) ? cfg.stylePreset : 'custom';
+    renderPresets();
     if (cfg.imageModel) els.imageModel.value = cfg.imageModel;
     if (cfg.textModel) els.textModel.value = cfg.textModel;
     if (cfg.aspect) els.aspect.value = cfg.aspect;
@@ -75,6 +80,34 @@
       }
       if (els.rememberKey.checked) store.set(KEY_KEY, els.apiKey.value.trim());
     }, 300);
+  }
+
+  // ---------- style presets ----------
+  function styleText() {
+    const preset = STYLE_PRESETS.find((p) => p.id === stylePreset);
+    return [preset?.prompt, els.style.value.trim()].filter(Boolean).join(', ');
+  }
+
+  function renderPresets() {
+    els.stylePresets.textContent = '';
+    STYLE_PRESETS.forEach((p) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'preset' + (p.id === stylePreset ? ' active' : '');
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', String(p.id === stylePreset));
+      b.innerHTML = `<span class="icon" aria-hidden="true">${p.icon}</span><span>${escapeHtml(p.label)}</span>`;
+      b.addEventListener('click', () => { stylePreset = p.id; renderPresets(); save(); });
+      els.stylePresets.appendChild(b);
+    });
+    const preset = STYLE_PRESETS.find((p) => p.id === stylePreset);
+    const custom = !preset?.prompt;
+    els.presetPrompt.textContent = custom ? '' : `Se añade a cada imagen: “${preset.prompt}”`;
+    els.presetPrompt.hidden = custom;
+    els.styleLabel.textContent = custom ? 'Tu estilo visual' : 'Detalles extra de estilo (opcional)';
+    els.style.placeholder = custom
+      ? 'Describe el estilo: ej. voxel art 3D, colores vibrantes, iluminación dramática, humor negro'
+      : 'Ej: colores vibrantes, iluminación dramática, humor negro';
   }
 
   // ---------- characters ----------
@@ -204,7 +237,7 @@
       'Describe composición, acción, encuadre, fondo e iluminación de forma concreta y visual. Exagera lo dramático o cómico para captar atención.',
       'Personajes que deben aparecer (respeta exactamente su aspecto, refiérete a ellos por su descripción visual):',
       castText,
-      els.style.value.trim() ? `Estilo visual del canal: ${els.style.value.trim()}` : '',
+      styleText() ? `Estilo visual del canal: ${styleText()}` : '',
     ].filter(Boolean).join('\n');
 
     const data = await callApi(`${modelPath(els.textModel.value.trim())}:generateContent`, {
@@ -225,7 +258,7 @@
       parts.push('Recurring characters of the channel, keep their appearance exactly consistent:\n' +
         cast.map((c) => `- ${c.name || 'Character'}: ${c.desc}`).join('\n'));
     }
-    if (els.style.value.trim()) parts.push(`Visual style: ${els.style.value.trim()}.`);
+    if (styleText()) parts.push(`Visual style: ${styleText()}.`);
     parts.push(`Aspect ratio ${aspect}${aspect === '9:16' ? ', vertical composition' : ''}.`);
     if (els.noText.checked) parts.push('Do not include any text, captions, letters, logos or watermarks unless they are part of a character description.');
     return parts.join('\n\n');
@@ -467,6 +500,7 @@
 
   // ---------- init ----------
   try { applyConfig(JSON.parse(store.get(CFG_KEY) || 'null')); } catch { /* ignore corrupt config */ }
+  renderPresets();
   const savedKey = store.get(KEY_KEY);
   if (savedKey) { els.apiKey.value = savedKey; els.rememberKey.checked = true; }
   if (!characters.length) {

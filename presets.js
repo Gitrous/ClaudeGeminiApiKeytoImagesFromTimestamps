@@ -1,0 +1,35 @@
+/**
+ * Style templates. `prompt` is appended to every image prompt; the user's
+ * extra style text is added after it. `custom` uses only the user's text.
+ */
+window.STYLE_PRESETS = [
+  { id: 'custom', label: 'Personalizado', icon: '✏️', prompt: '' },
+  { id: 'cartoon', label: 'Cartoon', icon: '🎨',
+    prompt: '2D cartoon illustration, bold clean outlines, flat vibrant colors, exaggerated expressive characters, playful animated TV series look' },
+  { id: 'anime', label: 'Anime', icon: '🌸',
+    prompt: 'anime style, cel shading, clean line art, expressive eyes, vivid colors, dynamic camera angles, high quality Japanese animation key visual' },
+  { id: 'realista', label: 'Realista', icon: '📷',
+    prompt: 'photorealistic, cinematic photograph, natural lighting, shallow depth of field, 35mm lens, highly detailed realistic textures' },
+  { id: 'paint', label: 'Microsoft Paint', icon: '🖌️',
+    prompt: 'crude drawing made in Microsoft Paint with a mouse, jagged aliased lines, flat default Paint palette colors, paint bucket fills, wobbly shapes, amateurish naive and intentionally funny look, plain white background' },
+  { id: '3d', label: 'Animación 3D', icon: '🧸',
+    prompt: '3D animated feature film style, soft global illumination, rounded appealing character shapes, expressive faces, polished family movie render' },
+  { id: 'voxel', label: 'Voxel / bloques', icon: '🧱',
+    prompt: 'voxel art 3D render, blocky cubic shapes, isometric-ish view, vibrant colors, soft shadows, video game block world aesthetic' },
+  { id: 'pixel', label: 'Pixel art', icon: '👾',
+    prompt: '16-bit retro pixel art, limited color palette, crisp visible pixels, classic console video game scene' },
+  { id: 'comic', label: 'Cómic', icon: '💥',
+    prompt: 'American comic book style, bold ink lines, halftone dot shading, dramatic poses, saturated colors, action panel composition' },
+  { id: 'acuarela', label: 'Acuarela', icon: '💧',
+    prompt: 'watercolor painting, soft color bleeds, visible paper texture, delicate loose brush strokes, gentle pastel tones' },
+  { id: 'plastilina', label: 'Plastilina', icon: '🟠',
+    prompt: 'claymation stop-motion style, handmade plasticine characters with visible fingerprints, miniature physical set, soft studio lighting' },
+  { id: 'boceto', label: 'Boceto a lápiz', icon: '✍️',
+    prompt: 'pencil sketch on paper, graphite shading, cross-hatching, rough construction lines, black and white hand drawing' },
+  { id: 'infantil', label: 'Dibujo infantil', icon: '🖍️',
+    prompt: 'childlike crayon drawing, wax crayon texture, simple stick-like shapes, bright colors, scribbled coloring outside the lines, on white paper' },
+  { id: 'lowpoly', label: 'Low poly', icon: '🔷',
+    prompt: 'low poly 3D art, faceted geometric shapes, flat shaded polygons, clean minimal gradient background' },
+  { id: 'terror', label: 'Terror oscuro', icon: '🕯️',
+    prompt: 'dark horror illustration, eerie moody atmosphere, deep shadows, desaturated colors with sickly highlights, unsettling cinematic lighting' },
+];

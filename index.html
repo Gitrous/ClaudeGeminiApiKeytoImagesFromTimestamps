@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
   <script src="parser.js" defer></script>
+  <script src="presets.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -92,9 +93,14 @@
     <!-- 2. Canal y personajes -->
     <section class="panel">
       <h2><span class="step">2</span> Tu canal y sus personajes</h2>
+      <div class="field">
+        <span class="lbl">Plantilla de estilo</span>
+        <div id="stylePresets" class="presets" role="radiogroup" aria-label="Plantilla de estilo"></div>
+        <p id="presetPrompt" class="hint presetPrompt"></p>
+      </div>
       <label>
-        <span>Estilo visual del canal</span>
-        <textarea id="style" rows="2" placeholder="Ej: voxel art 3D, colores vibrantes, iluminación dramática, humor negro"></textarea>
+        <span id="styleLabel">Detalles extra de estilo (opcional)</span>
+        <textarea id="style" rows="2" placeholder="Ej: colores vibrantes, iluminación dramática, humor negro"></textarea>
       </label>
 
       <div id="characters" class="chars"></div>
@@ -131,7 +137,7 @@
   <template id="charTpl">
     <div class="char">
       <div class="charHead">
-        <input class="cName" placeholder="Nombre (ej: Esqueleto Táctico)">
+        <input class="cName" placeholder="Nombre del personaje">
         <label class="check small"><input class="cAlways" type="checkbox"> <span>Siempre en escena</span></label>
         <button type="button" class="ghost cRemove" title="Eliminar personaje">✕</button>
       </div>
