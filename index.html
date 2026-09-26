@@ -40,7 +40,7 @@
         <div class="grid2">
           <label>
             <span>Key de Pollinations (opcional, gratis)</span>
-            <input id="pollKey" type="password" autocomplete="off" placeholder="pk_... o sk_...">
+            <input id="pollKey" type="password" autocomplete="off" placeholder="sk_... (Secret key)">
           </label>
           <label>
             <span>Modelo</span>
@@ -52,7 +52,11 @@
             </datalist>
           </label>
         </div>
-        <p class="hint">Sin key funciona con límite (una imagen cada ~15 s). Si Pollinations la pide, créala gratis en <a href="https://enter.pollinations.ai" target="_blank" rel="noopener">enter.pollinations.ai</a>.</p>
+        <div class="row">
+          <button id="pollLoad" type="button" class="ghost">Ver qué modelos valen con pollen gratuito</button>
+          <span id="pollStatus" class="hint"></span>
+        </div>
+        <p class="hint">Crea una <b>Secret key</b> (<code>sk_</code>) gratis en <a href="https://enter.pollinations.ai" target="_blank" rel="noopener">enter.pollinations.ai</a> y revisa que no tenga presupuesto (budget) a 0. Las keys <code>pk_</code> están limitadas a 1 pollen por hora. Algunos modelos son de pago y no aceptan el pollen gratuito.</p>
       </div>
 
       <div class="pBlock" data-for="huggingface">

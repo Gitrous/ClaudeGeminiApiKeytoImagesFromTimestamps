@@ -426,6 +426,49 @@
     return blob;
   }
 
+  // Public catalogue of Pollinations image models; `paid` ones need purchased pollen.
+  let pollCatalog = null;
+  async function pollinationsModels() {
+    if (pollCatalog) return pollCatalog;
+    const res = await fetch('https://gen.pollinations.ai/image/models');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : data.data || data.models || [];
+    pollCatalog = list.map((m) => (typeof m === 'string'
+      ? { name: m, aliases: [], paid: false }
+      : { name: m.name || m.id, aliases: m.aliases || [], paid: !!(m.paid_only ?? m.paidOnly) }))
+      .filter((m) => m.name);
+    return pollCatalog;
+  }
+
+  function fillPollModels(catalog) {
+    const dl = $('#pollModels');
+    dl.textContent = '';
+    [...catalog.filter((m) => !m.paid), ...catalog.filter((m) => m.paid)].forEach((m) => {
+      const o = document.createElement('option');
+      o.value = m.name;
+      o.textContent = m.paid ? 'de pago (pollen comprado)' : 'vale con pollen gratuito';
+      dl.appendChild(o);
+    });
+  }
+
+  async function explainPoll402(model, key, serverMsg) {
+    const lines = [`Pollinations respondió "sin saldo" (402): ${serverMsg}`];
+    try {
+      const catalog = await pollinationsModels();
+      fillPollModels(catalog);
+      const m = catalog.find((x) => x.name === model || x.aliases.includes(model));
+      if (m?.paid) lines.push(`El modelo "${model}" es de pago: solo funciona con pollen comprado, no con el gratuito.`);
+      const free = catalog.filter((x) => !x.paid).map((x) => x.name);
+      if (free.length) lines.push(`Modelos que valen con pollen gratuito: ${free.slice(0, 6).join(', ')}.`);
+    } catch { /* catalogue unavailable: keep the generic advice */ }
+    if (key.startsWith('pk_')) {
+      lines.push('Tu key es "pk_" (antigua): Pollinations la limita a 1 pollen por hora. Crea una "Secret key" (sk_) en enter.pollinations.ai.');
+    }
+    lines.push('Revisa también en enter.pollinations.ai que la key no tenga un presupuesto (budget) agotado o a 0.');
+    return fatal(lines.join('\n\n'));
+  }
+
   async function pollinationsImage(prompt, signal, onStatus) {
     const key = els.pollKey.value.trim();
     const [width, height] = SIZES[els.aspect.value] || SIZES['1:1'];
@@ -433,26 +476,41 @@
     const text = encodeURIComponent(prompt.replace(/\s+/g, ' ').slice(0, 1800));
     const model = els.pollModel.value.trim() || DEFAULT_POLL_MODEL;
     const q = new URLSearchParams({ model, width, height, seed, nologo: 'true' });
-    if (key) q.set('key', key);
-    const urls = [`https://gen.pollinations.ai/image/${text}?${q}`];
+    const secret = key.startsWith('sk_');
+    // Secret keys go in the Authorization header; publishable keys in ?key=.
+    const tries = [];
     if (!key) {
+      tries.push({ url: `https://gen.pollinations.ai/image/${text}?${q}` });
       // Legacy anonymous endpoint, used when the new one asks for a key.
-      urls.push(`https://image.pollinations.ai/prompt/${text}?${new URLSearchParams({ model: 'flux', width, height, seed, nologo: 'true' })}`);
+      tries.push({ url: `https://image.pollinations.ai/prompt/${text}?${new URLSearchParams({ model: 'flux', width, height, seed, nologo: 'true' })}` });
+    } else if (secret) {
+      tries.push({ url: `https://gen.pollinations.ai/image/${text}?${q}`, headers: { Authorization: `Bearer ${key}` } });
+    } else {
+      q.set('key', key);
+      tries.push({ url: `https://gen.pollinations.ai/image/${text}?${q}` });
     }
     for (let attempt = 0; ; attempt++) {
       await throttle(key ? 1000 : 16000, signal, (ms) => onStatus(`Esperando turno gratuito (${Math.ceil(ms / 1000)} s)…`));
       onStatus('Generando imagen…');
       let lastStatus = 0; let lastMsg = '';
-      for (const url of urls) {
-        const res = await fetch(url, { signal });
+      for (const t of tries) {
+        let res;
+        try {
+          res = await fetch(t.url, { signal, headers: t.headers });
+        } catch (err) {
+          if (err.name === 'AbortError' || !t.headers) throw err;
+          // Header blocked (CORS): fall back to the query-string key.
+          const u = new URL(t.url); u.searchParams.set('key', key);
+          res = await fetch(u, { signal });
+        }
         if (res.ok) return asImage(res);
         lastStatus = res.status; lastMsg = await responseError(res);
         if (![401, 402, 403].includes(res.status)) break;
       }
-      if (lastStatus === 402 && key) throw fatal('Tu key de Pollinations se quedó sin saldo gratuito. Espera a que se recargue o prueba con Hugging Face.');
+      if (lastStatus === 402 && key) throw await explainPoll402(model, key, lastMsg);
       if ([401, 402, 403].includes(lastStatus)) {
         throw fatal(key
-          ? `Pollinations rechazó tu key (${lastMsg}). Revisa que esté bien copiada.`
+          ? `Pollinations rechazó tu key: ${lastMsg}\n\nRevisa que esté bien copiada.`
           : 'Pollinations pide una key gratuita: créala en https://enter.pollinations.ai y pégala en "Key de Pollinations".');
       }
       if ((lastStatus === 429 || lastStatus >= 500) && attempt < 3) {
@@ -777,6 +835,18 @@
   [els.aspect, els.concurrency, els.enhance, els.noText].forEach((el) => el.addEventListener('change', save));
   els.script.addEventListener('input', renderPreview);
   els.loadModels.addEventListener('click', loadModels);
+  $('#pollLoad').addEventListener('click', async () => {
+    const st = $('#pollStatus');
+    st.textContent = 'Cargando…';
+    try {
+      const catalog = await pollinationsModels();
+      fillPollModels(catalog);
+      const free = catalog.filter((m) => !m.paid).length;
+      st.textContent = `${catalog.length} modelos (${free} valen con pollen gratuito). Borra el campo Modelo para ver la lista.`;
+    } catch (err) {
+      st.textContent = 'No se pudo cargar la lista: ' + err.message;
+    }
+  });
   els.generate.addEventListener('click', startAll);
   els.stop.addEventListener('click', () => abort?.abort());
   els.downloadAll.addEventListener('click', downloadZip);
