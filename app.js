@@ -207,11 +207,23 @@
         signal,
       });
       if (res.ok) return res.json();
-      const retryable = res.status === 429 || res.status >= 500;
       let msg = `HTTP ${res.status}`;
       try { msg = (await res.json()).error?.message || msg; } catch { /* keep status */ }
+      if (res.status === 429 && /limit:\s*0\b/.test(msg)) {
+        // No free-tier quota for this model: retrying can never succeed.
+        const model = (msg.match(/model:\s*([\w.-]+)/) || [])[1] || path.split(/[/:]/)[1];
+        const err = new Error(
+          `Tu API key no tiene cuota para el modelo "${model}" (límite 0 en el plan gratuito). ` +
+          'Google solo permite generar imágenes por API con la facturación activada: ' +
+          'actívala en https://aistudio.google.com/apikey (Set up billing) o usa una key de un proyecto con facturación.');
+        err.fatal = true;
+        throw err;
+      }
+      const retryable = res.status === 429 || res.status >= 500;
       if (retryable && attempt < 3) {
-        await sleep(2000 * 2 ** attempt, signal);
+        const hinted = parseFloat((msg.match(/retry in ([\d.]+)s/i) || [])[1]);
+        const wait = hinted ? Math.min(hinted * 1000 + 500, 65000) : 2000 * 2 ** attempt;
+        await sleep(wait, signal);
         continue;
       }
       throw new Error(msg);
@@ -336,6 +348,7 @@
   }
 
   async function processJob(job, signal) {
+    job.fatal = null;
     try {
       setJobState(job, 'working', els.enhance.checked ? 'Escribiendo prompt…' : 'Generando imagen…');
       let prompt;
@@ -356,6 +369,7 @@
       job.filename = `${String(job.index).padStart(2, '0')}_${job.scene.timestamp.replace(/:/g, '-')}.${ext}`;
       setJobState(job, 'done');
     } catch (err) {
+      if (err.fatal) job.fatal = err;
       if (err.name === 'AbortError') setJobState(job, 'error', 'Detenido');
       else setJobState(job, 'error', 'Error: ' + err.message);
     }
@@ -381,6 +395,11 @@
         const job = queue.shift();
         await processJob(job, controller.signal);
         updateProgress(++done, list.length);
+        if (job.fatal && !controller.signal.aborted) {
+          // Same error would hit every remaining scene: stop and explain once.
+          controller.abort();
+          alert(job.fatal.message);
+        }
       }
     });
     await Promise.all(workers);
