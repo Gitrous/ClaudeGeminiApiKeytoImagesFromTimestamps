@@ -18,7 +18,7 @@ La web no contiene ninguna API key: cada usuario pone la suya en su navegador.
 
 1. Abre `index.html` en el navegador (o publícala con GitHub Pages; no necesita servidor).
 2. Elige el **motor de imágenes**:
-   - **Pollinations**: gratis. Sin key, una imagen cada ~15 s; con key gratuita de [enter.pollinations.ai](https://enter.pollinations.ai), más rápido.
+   - **Pollinations**: gratis con key de [enter.pollinations.ai](https://enter.pollinations.ai) (saldo diario gratuito). Modelo por defecto `black-forest-labs/flux.1-schnell`. Sin key se intenta el modo anónimo (una imagen cada ~15 s), que puede no estar disponible.
    - **Hugging Face**: gratis con un [token](https://huggingface.co/settings/tokens) (créditos mensuales limitados). Modelo por defecto `black-forest-labs/FLUX.1-schnell`.
    - **Gemini Nano Banana**: mejor calidad y admite imágenes de referencia, pero Google exige facturación activada (el plan gratuito tiene límite 0 para imágenes).
 3. Pega tu API key de Gemini ([Google AI Studio](https://aistudio.google.com/apikey)) para que Gemini escriba los prompts leyendo todo el guion. El modelo de texto tiene cuota gratuita. Sin key, se usa el texto de cada escena tal cual.

@@ -8,7 +8,8 @@
   const PROVIDERS = ['pollinations', 'huggingface', 'gemini'];
   const DIRECTOR_CHUNK = 40;
   const MAX_REFS = 3;
-  const CFG_VERSION = 3;
+  const CFG_VERSION = 4;
+  const DEFAULT_POLL_MODEL = 'black-forest-labs/flux.1-schnell';
   const DEFAULT_IMAGE_MODEL = 'gemini-3.1-flash-image';
 
   const $ = (sel, el = document) => el.querySelector(sel);
@@ -69,7 +70,9 @@
     els.imageModel.value = cfg.imageModel && !oldDefault ? cfg.imageModel : DEFAULT_IMAGE_MODEL;
     if (cfg.textModel) els.textModel.value = cfg.textModel;
     provider = PROVIDERS.includes(cfg.provider) ? cfg.provider : 'pollinations';
-    if (cfg.pollModel) els.pollModel.value = cfg.pollModel;
+    // v3 configs saved the old default alias 'flux'; move them to the new default.
+    const oldPollDefault = !(cfg.v >= 4) && cfg.pollModel === 'flux';
+    els.pollModel.value = cfg.pollModel && !oldPollDefault ? cfg.pollModel : DEFAULT_POLL_MODEL;
     if (cfg.hfModel) els.hfModel.value = cfg.hfModel;
     renderProvider();
     if (cfg.aspect) els.aspect.value = cfg.aspect;
@@ -428,7 +431,7 @@
     const [width, height] = SIZES[els.aspect.value] || SIZES['1:1'];
     const seed = Math.floor(Math.random() * 2 ** 31);
     const text = encodeURIComponent(prompt.replace(/\s+/g, ' ').slice(0, 1800));
-    const model = els.pollModel.value.trim() || 'flux';
+    const model = els.pollModel.value.trim() || DEFAULT_POLL_MODEL;
     const q = new URLSearchParams({ model, width, height, seed, nologo: 'true' });
     if (key) q.set('key', key);
     const urls = [`https://gen.pollinations.ai/image/${text}?${q}`];
