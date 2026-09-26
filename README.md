@@ -1,6 +1,9 @@
-# Timestamps → Imágenes (Gemini)
+# Timestamps → Imágenes
 
-Web estática que genera **una imagen por cada timestamp** de tu guion usando **tu propia API key de Gemini**, manteniendo siempre los **personajes fijos de tu canal**.
+Web estática que genera **una imagen por cada timestamp** de tu guion, manteniendo siempre los **personajes fijos de tu canal**.
+
+- **Gemini como director (gratis):** lee el guion completo de una vez y escribe un prompt coherente para cada timestamp (mismos personajes, mismos lugares, continuidad entre escenas).
+- **Motor de imágenes a elegir:** Pollinations (gratis), Hugging Face FLUX (gratis con token) o Gemini Nano Banana (requiere facturación).
 
 ## Publicarla en GitHub Pages
 
@@ -14,15 +17,19 @@ La web no contiene ninguna API key: cada usuario pone la suya en su navegador.
 ## Cómo usarla
 
 1. Abre `index.html` en el navegador (o publícala con GitHub Pages; no necesita servidor).
-2. Pega tu API key de Gemini ([Google AI Studio](https://aistudio.google.com/apikey)).
-3. Elige una **plantilla de estilo** (Cartoon, Anime, Realista, Microsoft Paint, Figuras de palitos, Animación 3D, Voxel, Pixel art, Cómic, Acuarela, Plastilina, Boceto a lápiz, Dibujo infantil, Low poly, Terror oscuro) o **Personalizado** para escribir el tuyo. Con una plantilla puedes añadir detalles extra de estilo.
+2. Elige el **motor de imágenes**:
+   - **Pollinations**: gratis. Sin key, una imagen cada ~15 s; con key gratuita de [enter.pollinations.ai](https://enter.pollinations.ai), más rápido.
+   - **Hugging Face**: gratis con un [token](https://huggingface.co/settings/tokens) (créditos mensuales limitados). Modelo por defecto `black-forest-labs/FLUX.1-schnell`.
+   - **Gemini Nano Banana**: mejor calidad y admite imágenes de referencia, pero Google exige facturación activada (el plan gratuito tiene límite 0 para imágenes).
+3. Pega tu API key de Gemini ([Google AI Studio](https://aistudio.google.com/apikey)) para que Gemini escriba los prompts leyendo todo el guion. El modelo de texto tiene cuota gratuita. Sin key, se usa el texto de cada escena tal cual.
+4. Elige una **plantilla de estilo** (Cartoon, Anime, Realista, Microsoft Paint, Figuras de palitos, Animación 3D, Voxel, Pixel art, Cómic, Acuarela, Plastilina, Boceto a lápiz, Dibujo infantil, Low poly, Terror oscuro) o **Personalizado** para escribir el tuyo. Con una plantilla puedes añadir detalles extra de estilo.
    Las plantillas están en `presets.js`; añadir una nueva es añadir un objeto a la lista.
-4. Define los personajes del canal:
+5. Define los personajes del canal:
    - **Nombre** y **alias**: se usan para detectar en qué escenas aparece cada personaje.
    - **Siempre en escena**: el protagonista aparece en todas las imágenes.
    - **Descripción visual**: se inyecta en cada prompt para mantener la consistencia.
-   - **Imágenes de referencia** (hasta 3 por personaje): se envían al modelo `gemini-*-image` para que el personaje salga igual en todas las imágenes.
-5. Pega el guion y pulsa **Generar imágenes**. Luego descarga cada imagen o todas en un `.zip` (con un `manifest.json` que tiene timestamp, texto y prompt de cada escena).
+   - **Imágenes de referencia** (hasta 3 por personaje): solo con Nano Banana: se envían al modelo `gemini-*-image` para que el personaje salga igual en todas las imágenes.
+6. Pega el guion y pulsa **Generar imágenes**. Cada tarjeta muestra su prompt, que puedes **editar** y pulsar **Regenerar**. Luego descarga cada imagen o todas en un `.zip` (con un `manifest.json` que tiene timestamp, texto y prompt de cada escena).
 
 Con **Exportar/Importar configuración** guardas el canal (estilo + personajes + referencias) en un JSON reutilizable.
 

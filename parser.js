@@ -8,7 +8,7 @@
  */
 (function (root) {
   const TS_RE = /[\[(]?\b(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:[.,]\d{1,3})?\b[\])]?/g;
-  const RANGE_SEP_RE = /^\s*(?:-{1,2}>|-|–|—|to|a|al|hasta)\s*$/i;
+  const RANGE_SEP_RE = /^[ \t]*(?:-{1,2}>|-|–|—|to|a|al|hasta)[ \t]*$/i;
 
   function toSeconds(h, m, s) {
     return (parseInt(h || '0', 10) * 3600) + parseInt(m, 10) * 60 + parseInt(s, 10);

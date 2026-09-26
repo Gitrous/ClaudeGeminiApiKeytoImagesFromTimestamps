@@ -163,3 +163,17 @@ details.adv > summary { cursor: pointer; font-weight: 600; font-size: .9rem; }
 .preset:hover { border-color: var(--accent); }
 .preset.active { border-color: var(--accent); background: var(--chip); box-shadow: inset 0 0 0 1px var(--accent); font-weight: 600; }
 .presetPrompt { font-style: italic; }
+
+.providers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.provider {
+  justify-content: flex-start; gap: 10px; padding: 10px 12px; text-align: left;
+  background: var(--field); white-space: normal; line-height: 1.25;
+}
+.provider .pIcon { font-size: 1.5rem; }
+.provider small { display: block; color: var(--muted); font-size: .78rem; margin-top: 2px; }
+.provider:hover { border-color: var(--accent); }
+.provider.active { border-color: var(--accent); background: var(--chip); box-shadow: inset 0 0 0 1px var(--accent); }
+.pBlock { border-left: 3px solid var(--accent); padding: 2px 0 2px 12px; margin: 6px 0 14px; }
+.sub3 { font-size: .95rem; margin: 16px 0 4px; }
+.meta textarea.prompt { font: .75rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; margin-top: 6px; }
+.hint.small { font-size: .75rem; margin: 4px 0 0; }

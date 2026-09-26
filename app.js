@@ -4,8 +4,11 @@
   const API = 'https://generativelanguage.googleapis.com/v1beta';
   const CFG_KEY = 'tsimg.config.v1';
   const KEY_KEY = 'tsimg.apikey';
+  const EXTRA_KEYS_KEY = 'tsimg.keys';
+  const PROVIDERS = ['pollinations', 'huggingface', 'gemini'];
+  const DIRECTOR_CHUNK = 40;
   const MAX_REFS = 3;
-  const CFG_VERSION = 2;
+  const CFG_VERSION = 3;
   const DEFAULT_IMAGE_MODEL = 'gemini-3.1-flash-image';
 
   const $ = (sel, el = document) => el.querySelector(sel);
@@ -14,6 +17,8 @@
     imageModel: $('#imageModel'), textModel: $('#textModel'), aspect: $('#aspect'),
     concurrency: $('#concurrency'), enhance: $('#enhance'), noText: $('#noText'),
     loadModels: $('#loadModels'), modelsStatus: $('#modelsStatus'),
+    providers: $('#providers'), pollKey: $('#pollKey'), pollModel: $('#pollModel'),
+    hfKey: $('#hfKey'), hfModel: $('#hfModel'),
     style: $('#style'), stylePresets: $('#stylePresets'), presetPrompt: $('#presetPrompt'),
     styleLabel: $('#styleLabel'), characters: $('#characters'), addChar: $('#addChar'),
     exportCfg: $('#exportCfg'), importCfg: $('#importCfg'),
@@ -25,6 +30,7 @@
   let characters = [];
   let jobs = [];
   let stylePreset = 'custom';
+  let provider = 'pollinations';
   let abort = null;
 
   // ---------- storage ----------
@@ -37,6 +43,9 @@
   function currentConfig() {
     return {
       v: CFG_VERSION,
+      provider,
+      pollModel: els.pollModel.value.trim(),
+      hfModel: els.hfModel.value.trim(),
       stylePreset,
       style: els.style.value,
       imageModel: els.imageModel.value.trim(),
@@ -59,6 +68,10 @@
     const oldDefault = !(cfg.v >= 2) && cfg.imageModel === 'gemini-2.5-flash-image';
     els.imageModel.value = cfg.imageModel && !oldDefault ? cfg.imageModel : DEFAULT_IMAGE_MODEL;
     if (cfg.textModel) els.textModel.value = cfg.textModel;
+    provider = PROVIDERS.includes(cfg.provider) ? cfg.provider : 'pollinations';
+    if (cfg.pollModel) els.pollModel.value = cfg.pollModel;
+    if (cfg.hfModel) els.hfModel.value = cfg.hfModel;
+    renderProvider();
     if (cfg.aspect) els.aspect.value = cfg.aspect;
     if (cfg.concurrency) els.concurrency.value = cfg.concurrency;
     if (cfg.enhance != null) els.enhance.checked = cfg.enhance;
@@ -83,8 +96,23 @@
         const slim = { ...currentConfig(), characters: characters.map((c) => ({ ...c, refs: [] })) };
         store.set(CFG_KEY, JSON.stringify(slim));
       }
-      if (els.rememberKey.checked) store.set(KEY_KEY, els.apiKey.value.trim());
+      if (els.rememberKey.checked) saveKeys();
     }, 300);
+  }
+
+  function saveKeys() {
+    store.set(KEY_KEY, els.apiKey.value.trim());
+    store.set(EXTRA_KEYS_KEY, JSON.stringify({ pollinations: els.pollKey.value.trim(), huggingface: els.hfKey.value.trim() }));
+  }
+
+  // ---------- provider ----------
+  function renderProvider() {
+    els.providers.querySelectorAll('.provider').forEach((b) => {
+      const on = b.dataset.provider === provider;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', String(on));
+    });
+    document.querySelectorAll('.pBlock').forEach((el) => { el.hidden = el.dataset.for !== provider; });
   }
 
   // ---------- style presets ----------
@@ -244,6 +272,85 @@
 
   const modelPath = (m) => (m.startsWith('models/') ? m : `models/${m}`);
 
+  // Spaces out requests to services with per-IP limits (e.g. anonymous Pollinations).
+  let nextSlot = 0;
+  async function throttle(ms, signal, onWait) {
+    const now = Date.now();
+    const wait = Math.max(0, nextSlot - now);
+    nextSlot = Math.max(now, nextSlot) + ms;
+    if (wait) { onWait?.(wait); await sleep(wait, signal); }
+  }
+
+  const SIZES = {
+    '9:16': [768, 1344], '16:9': [1344, 768], '1:1': [1024, 1024],
+    '4:5': [896, 1120], '3:4': [864, 1152], '4:3': [1152, 864],
+  };
+
+  // ---------- Gemini as director: reads the whole script, writes every prompt ----------
+  const castLine = (c) => `- ${c.name || 'Character'}${c.aliases.trim() ? ` (alias: ${c.aliases.trim()})` : ''}${c.always ? ' [appears in every scene]' : ''}: ${c.desc}`;
+
+  async function directPrompts(scenes, signal) {
+    const cast = characters.filter((c) => c.name.trim() || c.desc.trim());
+    const fullScript = scenes.map((s, i) => `#${i + 1} [${s.timestamp}] ${s.text}`).join('\n');
+    const external = provider !== 'gemini';
+    const system = [
+      'You are the art director of a video channel. You receive a full video script split by timestamps.',
+      'Read the WHOLE script first to understand the story, then write one image prompt for EACH numbered scene.',
+      'Rules:',
+      '- Write prompts in English, 50-110 words each, concrete and visual: subject, action, setting, camera framing, lighting, mood.',
+      '- Each image is generated independently by a model with NO memory of other images, so every prompt must be self-contained:',
+      '  whenever a character appears, repeat its full fixed visual description exactly; describe recurring locations the same way every time.',
+      '- Keep continuity across scenes (same outfits, same places, consistent story progression). Use context from surrounding scenes to decide what to show when a line is abstract.',
+      '- Characters marked [appears in every scene] must appear in every prompt. Other characters appear only when the scene involves them.',
+      `- Composition for aspect ratio ${els.aspect.value}${els.aspect.value === '9:16' ? ' (vertical, subject centered, readable on a phone)' : ''}.`,
+      styleText() ? `- End every prompt with this visual style: ${styleText()}.` : '',
+      els.noText.checked ? '- Never ask for text, captions, letters or watermarks in the image.' : '',
+      external ? '- The image model is a diffusion model (FLUX-like): prefer clear descriptive phrases over instructions; put the most important subject first.' : '',
+      cast.length ? 'Fixed characters of the channel:\n' + cast.map(castLine).join('\n') : 'There are no fixed characters.',
+      'Return JSON: an array with one object per scene: {"index": scene number, "characters": [names of fixed characters in the image], "prompt": "..."}.',
+    ].filter(Boolean).join('\n');
+
+    const out = new Map();
+    for (let from = 0; from < scenes.length; from += DIRECTOR_CHUNK) {
+      const to = Math.min(scenes.length, from + DIRECTOR_CHUNK);
+      const ask = scenes.length > DIRECTOR_CHUNK
+        ? `FULL SCRIPT (for context):\n${fullScript}\n\nWrite prompts ONLY for scenes #${from + 1} to #${to}.`
+        : `FULL SCRIPT:\n${fullScript}`;
+      const data = await callApi(`${modelPath(els.textModel.value.trim())}:generateContent`, {
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: ask }] }],
+        generationConfig: {
+          temperature: 0.8,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                index: { type: 'INTEGER' },
+                characters: { type: 'ARRAY', items: { type: 'STRING' } },
+                prompt: { type: 'STRING' },
+              },
+              required: ['index', 'prompt'],
+            },
+          },
+        },
+      }, signal);
+      const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '[]';
+      for (const item of JSON.parse(text)) {
+        if (item && Number.isInteger(item.index) && item.prompt) out.set(item.index, item);
+      }
+    }
+    return out;
+  }
+
+  function castFromNames(names, fallback) {
+    if (!Array.isArray(names)) return fallback;
+    const wanted = names.map((n) => norm(String(n)));
+    const picked = characters.filter((c) => c.always || (c.name.trim() && wanted.includes(norm(c.name.trim()))));
+    return picked.length || !fallback.length ? picked : fallback;
+  }
+
   async function enhancePrompt(sceneText, cast, signal) {
     const castText = cast.length
       ? cast.map((c) => `- ${c.name}: ${c.desc}`).join('\n')
@@ -268,6 +375,16 @@
   }
 
   function buildPrompt(base, cast, { raw }) {
+    if (provider !== 'gemini') {
+      // Diffusion models do best with one compact descriptive paragraph.
+      if (!raw) return base;
+      return [
+        base,
+        ...cast.map((c) => c.desc),
+        styleText(),
+        els.noText.checked ? 'no text, no watermark' : '',
+      ].filter(Boolean).join(', ');
+    }
     const aspect = els.aspect.value;
     const parts = [];
     parts.push(raw ? `Illustrate this scene from a video script (the script may be in Spanish): "${base}"` : base);
@@ -281,7 +398,103 @@
     return parts.join('\n\n');
   }
 
-  async function generateImage(prompt, cast, signal) {
+  function b64ToBlob(data, mimeType) {
+    return new Blob([Uint8Array.from(atob(data), (ch) => ch.charCodeAt(0))], { type: mimeType });
+  }
+
+  function fatal(message) {
+    const err = new Error(message);
+    err.fatal = true;
+    return err;
+  }
+
+  async function responseError(res) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const t = await res.text();
+      try { const j = JSON.parse(t); msg = j.error?.message || j.error || j.message || t || msg; } catch { msg = t || msg; }
+    } catch { /* keep status */ }
+    return typeof msg === 'string' ? msg.slice(0, 300) : JSON.stringify(msg).slice(0, 300);
+  }
+
+  async function asImage(res) {
+    const blob = await res.blob();
+    if (!blob.type.startsWith('image/')) throw new Error('El servicio no devolvió una imagen');
+    return blob;
+  }
+
+  async function pollinationsImage(prompt, signal, onStatus) {
+    const key = els.pollKey.value.trim();
+    const [width, height] = SIZES[els.aspect.value] || SIZES['1:1'];
+    const seed = Math.floor(Math.random() * 2 ** 31);
+    const text = encodeURIComponent(prompt.replace(/\s+/g, ' ').slice(0, 1800));
+    const model = els.pollModel.value.trim() || 'flux';
+    const q = new URLSearchParams({ model, width, height, seed, nologo: 'true' });
+    if (key) q.set('key', key);
+    const urls = [`https://gen.pollinations.ai/image/${text}?${q}`];
+    if (!key) {
+      // Legacy anonymous endpoint, used when the new one asks for a key.
+      urls.push(`https://image.pollinations.ai/prompt/${text}?${new URLSearchParams({ model: 'flux', width, height, seed, nologo: 'true' })}`);
+    }
+    for (let attempt = 0; ; attempt++) {
+      await throttle(key ? 1000 : 16000, signal, (ms) => onStatus(`Esperando turno gratuito (${Math.ceil(ms / 1000)} s)…`));
+      onStatus('Generando imagen…');
+      let lastStatus = 0; let lastMsg = '';
+      for (const url of urls) {
+        const res = await fetch(url, { signal });
+        if (res.ok) return asImage(res);
+        lastStatus = res.status; lastMsg = await responseError(res);
+        if (![401, 402, 403].includes(res.status)) break;
+      }
+      if (lastStatus === 402 && key) throw fatal('Tu key de Pollinations se quedó sin saldo gratuito. Espera a que se recargue o prueba con Hugging Face.');
+      if ([401, 402, 403].includes(lastStatus)) {
+        throw fatal(key
+          ? `Pollinations rechazó tu key (${lastMsg}). Revisa que esté bien copiada.`
+          : 'Pollinations pide una key gratuita: créala en https://enter.pollinations.ai y pégala en "Key de Pollinations".');
+      }
+      if ((lastStatus === 429 || lastStatus >= 500) && attempt < 3) {
+        await sleep(15000 * (attempt + 1), signal);
+        continue;
+      }
+      throw new Error(`Pollinations: ${lastMsg}`);
+    }
+  }
+
+  async function huggingfaceImage(prompt, signal, onStatus) {
+    const token = els.hfKey.value.trim();
+    if (!token) throw fatal('Pega tu token de Hugging Face (https://huggingface.co/settings/tokens).');
+    const model = els.hfModel.value.trim() || 'black-forest-labs/FLUX.1-schnell';
+    const [width, height] = SIZES[els.aspect.value] || SIZES['1:1'];
+    for (let attempt = 0; ; attempt++) {
+      onStatus('Generando imagen…');
+      const res = await fetch(`https://router.huggingface.co/hf-inference/models/${model}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'image/png' },
+        body: JSON.stringify({ inputs: prompt, parameters: { width, height } }),
+        signal,
+      });
+      if (res.ok) return asImage(res);
+      const msg = await responseError(res);
+      if (res.status === 401 || res.status === 403) throw fatal(`Hugging Face rechazó tu token (${msg}). Necesita permiso de Inference.`);
+      if (res.status === 402) throw fatal('Se acabaron los créditos gratuitos de Hugging Face de este mes. Prueba con Pollinations.');
+      if ((res.status === 429 || res.status === 503 || res.status >= 500) && attempt < 3) {
+        onStatus('El modelo se está cargando, reintentando…');
+        await sleep(10000 * (attempt + 1), signal);
+        continue;
+      }
+      throw new Error(`Hugging Face: ${msg}`);
+    }
+  }
+
+  async function generateImage(prompt, cast, signal, onStatus = () => {}) {
+    if (provider === 'pollinations') return pollinationsImage(prompt, signal, onStatus);
+    if (provider === 'huggingface') return huggingfaceImage(prompt, signal, onStatus);
+    onStatus('Generando imagen…');
+    const img = await geminiImage(prompt, cast, signal);
+    return b64ToBlob(img.data, img.mimeType);
+  }
+
+  async function geminiImage(prompt, cast, signal) {
     const model = els.imageModel.value.trim();
     const aspect = els.aspect.value;
 
@@ -324,10 +537,19 @@
       : job.scene.timestamp;
     $('.imgWrap', node).style.aspectRatio = els.aspect.value.replace(':', ' / ');
     $('.text', node).textContent = job.scene.text;
-    $('.who', node).textContent = job.cast.length ? 'Personajes: ' + job.cast.map((c) => c.name).join(', ') : '';
-    $('.regen', node).addEventListener('click', () => runJobs([job], { single: true }));
+    $('.regen', node).addEventListener('click', () => {
+      const edited = $('.prompt', node).value.trim();
+      job.override = edited && edited !== job.prompt ? edited : job.override || null;
+      job.retried = true;
+      runJobs([job], { single: true });
+    });
     job.el = node;
+    renderWho(job);
     return node;
+  }
+
+  function renderWho(job) {
+    $('.who', job.el).textContent = job.cast.length ? 'Personajes: ' + job.cast.map((c) => c.name).join(', ') : '';
   }
 
   function setJobState(job, state, detail) {
@@ -349,28 +571,31 @@
     } else {
       wrap.innerHTML = `<div class="status ${state}">${escapeHtml(detail || '')}</div>`;
     }
-    if (job.prompt) $('.prompt', job.el).textContent = job.prompt;
+    if (job.prompt) $('.prompt', job.el).value = job.override || job.prompt;
   }
+
+  const useDirector = () => els.enhance.checked && !!els.apiKey.value.trim();
 
   async function processJob(job, signal) {
     job.fatal = null;
+    const status = (msg) => setJobState(job, 'working', msg);
     try {
-      setJobState(job, 'working', els.enhance.checked ? 'Escribiendo prompt…' : 'Generando imagen…');
-      let prompt;
-      if (els.enhance.checked) {
-        const enhanced = await enhancePrompt(job.scene.text, job.cast, signal);
-        prompt = buildPrompt(enhanced, job.cast, { raw: false });
-      } else {
-        prompt = buildPrompt(job.scene.text, job.cast, { raw: true });
+      let prompt = job.override;
+      if (!prompt) {
+        if (!job.base && useDirector() && job.retried) {
+          // Regenerating a scene the director never covered: ask for just this one.
+          status('Gemini escribe el prompt…');
+          try { job.base = await enhancePrompt(job.scene.text, job.cast, signal); } catch (err) { if (err.name === 'AbortError') throw err; }
+        }
+        prompt = buildPrompt(job.base || job.scene.text, job.cast, { raw: !job.base });
       }
       job.prompt = prompt;
-      setJobState(job, 'working', 'Generando imagen…');
-      const img = await generateImage(prompt, job.cast, signal);
-      const bytes = Uint8Array.from(atob(img.data), (ch) => ch.charCodeAt(0));
+      status('Generando imagen…');
+      const blob = await generateImage(prompt, job.cast, signal, status);
       if (job.url) URL.revokeObjectURL(job.url);
-      job.blob = new Blob([bytes], { type: img.mimeType });
-      job.url = URL.createObjectURL(job.blob);
-      const ext = img.mimeType.includes('jpeg') ? 'jpg' : img.mimeType.split('/')[1] || 'png';
+      job.blob = blob;
+      job.url = URL.createObjectURL(blob);
+      const ext = blob.type.includes('jpeg') ? 'jpg' : blob.type.split('/')[1] || 'png';
       job.filename = `${String(job.index).padStart(2, '0')}_${job.scene.timestamp.replace(/:/g, '-')}.${ext}`;
       setJobState(job, 'done');
     } catch (err) {
@@ -380,8 +605,15 @@
     }
   }
 
-  async function runJobs(list, { single = false } = {}) {
-    if (!els.apiKey.value.trim()) { alert('Pega primero tu API key de Gemini.'); els.apiKey.focus(); return; }
+  function checkKeys() {
+    if (provider === 'gemini' && !els.apiKey.value.trim()) return ['Pega tu API key de Gemini para usar Nano Banana.', els.apiKey];
+    if (provider === 'huggingface' && !els.hfKey.value.trim()) return ['Pega tu token de Hugging Face.', els.hfKey];
+    return null;
+  }
+
+  async function runJobs(list, { single = false, direct = false } = {}) {
+    const missing = checkKeys();
+    if (missing) { alert(missing[0]); missing[1].focus(); return; }
     if (abort && !single) return;
     const controller = single && abort ? abort : new AbortController();
     const owner = !abort;
@@ -392,6 +624,24 @@
     }
 
     list.forEach((j) => setJobState(j, 'queued', 'En cola'));
+    if (direct && useDirector()) {
+      updateProgress(0, list.length, 'Gemini está leyendo el guion completo…');
+      try {
+        const plan = await directPrompts(list.map((j) => j.scene), controller.signal);
+        list.forEach((j) => {
+          const item = plan.get(j.index);
+          if (!item) return;
+          j.base = item.prompt;
+          j.cast = castFromNames(item.characters, j.cast);
+          renderWho(j);
+        });
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          alert(`Gemini no pudo escribir los prompts (${err.message}).\nSe usará directamente el texto de cada escena.`);
+        }
+      }
+    }
+
     let done = 0;
     updateProgress(0, list.length);
     const queue = [...list];
@@ -418,10 +668,10 @@
     els.downloadAll.disabled = !jobs.some((j) => j.state === 'done');
   }
 
-  function updateProgress(done, total) {
+  function updateProgress(done, total, label) {
     els.progress.hidden = false;
     $('.bar', els.progress).style.width = total ? `${(done / total) * 100}%` : '0';
-    $('.label', els.progress).textContent = `${done} / ${total}`;
+    $('.label', els.progress).textContent = label || `${done} / ${total}`;
   }
 
   function startAll() {
@@ -432,7 +682,7 @@
     jobs = scenes.map((scene, i) => ({ index: i + 1, scene, cast: charactersFor(scene.text) }));
     jobs.forEach((j) => els.results.appendChild(makeCard(j)));
     els.downloadAll.disabled = true;
-    runJobs(jobs);
+    runJobs(jobs, { direct: true });
   }
 
   async function downloadZip() {
@@ -444,7 +694,7 @@
       manifest.push({
         index: j.index, timestamp: j.scene.timestamp, seconds: j.scene.seconds,
         endSeconds: j.scene.endSeconds ?? null, text: j.scene.text,
-        characters: j.cast.map((c) => c.name), prompt: j.prompt || null,
+        characters: j.cast.map((c) => c.name), prompt: j.prompt || null, provider,
         image: j.state === 'done' ? j.filename : null,
       });
     }
@@ -491,8 +741,14 @@
     els.toggleKey.textContent = show ? 'Ocultar' : 'Mostrar';
   });
   els.rememberKey.addEventListener('change', () => {
-    if (els.rememberKey.checked) store.set(KEY_KEY, els.apiKey.value.trim());
-    else store.del(KEY_KEY);
+    if (els.rememberKey.checked) saveKeys();
+    else { store.del(KEY_KEY); store.del(EXTRA_KEYS_KEY); }
+  });
+  els.providers.addEventListener('click', (e) => {
+    const b = e.target.closest('.provider');
+    if (!b) return;
+    provider = b.dataset.provider;
+    renderProvider(); save();
   });
   els.addChar.addEventListener('click', () => {
     characters.push({ name: '', aliases: '', desc: '', always: characters.length === 0, refs: [] });
@@ -514,7 +770,7 @@
     try { applyConfig(JSON.parse(await file.text())); save(); } catch (err) { alert('Archivo no válido: ' + err.message); }
     e.target.value = '';
   });
-  [els.apiKey, els.style, els.imageModel, els.textModel, els.script].forEach((el) => el.addEventListener('input', save));
+  [els.apiKey, els.pollKey, els.hfKey, els.pollModel, els.hfModel, els.style, els.imageModel, els.textModel, els.script].forEach((el) => el.addEventListener('input', save));
   [els.aspect, els.concurrency, els.enhance, els.noText].forEach((el) => el.addEventListener('change', save));
   els.script.addEventListener('input', renderPreview);
   els.loadModels.addEventListener('click', loadModels);
@@ -527,6 +783,15 @@
   renderPresets();
   const savedKey = store.get(KEY_KEY);
   if (savedKey) { els.apiKey.value = savedKey; els.rememberKey.checked = true; }
+  try {
+    const extra = JSON.parse(store.get(EXTRA_KEYS_KEY) || 'null');
+    if (extra) {
+      els.pollKey.value = extra.pollinations || '';
+      els.hfKey.value = extra.huggingface || '';
+      els.rememberKey.checked = true;
+    }
+  } catch { /* ignore */ }
+  renderProvider();
   if (!characters.length) {
     characters = [{ name: '', aliases: '', desc: '', always: true, refs: [] }];
     renderCharacters();

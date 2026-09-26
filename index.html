@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Timestamps a Imágenes</title>
-  <meta name="description" content="Genera una imagen por cada timestamp de tu guion usando tu propia API key de Gemini, con personajes fijos del canal.">
+  <meta name="description" content="Genera una imagen por cada timestamp de tu guion con Gemini como director y motores de imagen gratuitos o Nano Banana, con personajes fijos del canal.">
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
   <script src="parser.js" defer></script>
@@ -18,37 +18,98 @@
   </header>
 
   <main>
-    <!-- 1. API key y modelo -->
+    <!-- 1. Motor de imágenes y keys -->
     <section class="panel">
-      <h2><span class="step">1</span> API key de Gemini</h2>
+      <h2><span class="step">1</span> Motor de imágenes</h2>
+      <div id="providers" class="providers" role="radiogroup" aria-label="Motor de imágenes">
+        <button type="button" class="provider" data-provider="pollinations" role="radio">
+          <span class="pIcon" aria-hidden="true">🌸</span>
+          <span><b>Pollinations</b><small>Gratis · sin tarjeta</small></span>
+        </button>
+        <button type="button" class="provider" data-provider="huggingface" role="radio">
+          <span class="pIcon" aria-hidden="true">🤗</span>
+          <span><b>Hugging Face</b><small>Gratis con token · créditos mensuales limitados</small></span>
+        </button>
+        <button type="button" class="provider" data-provider="gemini" role="radio">
+          <span class="pIcon" aria-hidden="true">🍌</span>
+          <span><b>Gemini Nano Banana</b><small>Mejor calidad · requiere facturación</small></span>
+        </button>
+      </div>
+
+      <div class="pBlock" data-for="pollinations">
+        <div class="grid2">
+          <label>
+            <span>Key de Pollinations (opcional, gratis)</span>
+            <input id="pollKey" type="password" autocomplete="off" placeholder="pk_... o sk_...">
+          </label>
+          <label>
+            <span>Modelo</span>
+            <input id="pollModel" list="pollModels" value="flux">
+            <datalist id="pollModels">
+              <option value="flux">
+              <option value="black-forest-labs/flux.1-schnell">
+              <option value="tongyi-mai/z-image-turbo">
+            </datalist>
+          </label>
+        </div>
+        <p class="hint">Sin key funciona con límite (una imagen cada ~15 s). Si Pollinations la pide, créala gratis en <a href="https://enter.pollinations.ai" target="_blank" rel="noopener">enter.pollinations.ai</a>.</p>
+      </div>
+
+      <div class="pBlock" data-for="huggingface">
+        <div class="grid2">
+          <label>
+            <span>Token de Hugging Face</span>
+            <input id="hfKey" type="password" autocomplete="off" placeholder="hf_...">
+          </label>
+          <label>
+            <span>Modelo</span>
+            <input id="hfModel" list="hfModels" value="black-forest-labs/FLUX.1-schnell">
+            <datalist id="hfModels">
+              <option value="black-forest-labs/FLUX.1-schnell">
+              <option value="stabilityai/stable-diffusion-xl-base-1.0">
+            </datalist>
+          </label>
+        </div>
+        <p class="hint">Crea un token gratis (tipo <i>Read</i> o con permiso <i>Inference</i>) en <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">huggingface.co/settings/tokens</a>. Las cuentas gratuitas tienen pocos créditos al mes.</p>
+      </div>
+
+      <div class="pBlock" data-for="gemini">
+        <label>
+          <span>Modelo de imagen de Gemini</span>
+          <input id="imageModel" list="imageModels" value="gemini-3.1-flash-image">
+          <datalist id="imageModels">
+            <option value="gemini-3.1-flash-image">Nano Banana 2</option>
+            <option value="gemini-3.1-flash-image-preview">Nano Banana 2 (preview)</option>
+            <option value="gemini-2.5-flash-image">Nano Banana</option>
+          </datalist>
+        </label>
+        <p class="hint">Nano Banana acepta imágenes de referencia de tus personajes (mejor consistencia), pero Google no da cuota gratuita para imágenes: necesitas la facturación activada.</p>
+      </div>
+
+      <h3 class="sub3">Gemini como director (gratis)</h3>
       <div class="row">
         <label class="grow">
-          <span>API key</span>
+          <span>API key de Gemini</span>
           <input id="apiKey" type="password" autocomplete="off" placeholder="AIza...">
         </label>
         <button id="toggleKey" type="button" class="ghost">Mostrar</button>
       </div>
       <label class="check">
-        <input id="rememberKey" type="checkbox">
-        <span>Recordar la key en este navegador (localStorage)</span>
+        <input id="enhance" type="checkbox" checked>
+        <span>Gemini lee <b>todo el guion</b> y escribe un prompt coherente para cada timestamp</span>
       </label>
-      <p class="hint">La key nunca sale de tu navegador salvo hacia <code>generativelanguage.googleapis.com</code>. Consíguela en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>.</p>
+      <p class="hint">El modelo de texto de Gemini tiene cuota gratuita. Sin key de Gemini se usa directamente el texto de cada escena. Consigue la key en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>.</p>
+      <label class="check">
+        <input id="rememberKey" type="checkbox">
+        <span>Recordar mis keys en este navegador (localStorage)</span>
+      </label>
+      <p class="hint">Las keys nunca salen de tu navegador salvo hacia el servicio correspondiente.</p>
 
       <details class="adv">
-        <summary>Modelos y opciones</summary>
+        <summary>Más opciones</summary>
         <div class="grid2">
           <label>
-            <span>Modelo de imagen</span>
-            <input id="imageModel" list="imageModels" value="gemini-3.1-flash-image">
-            <datalist id="imageModels">
-              <option value="gemini-3.1-flash-image">Nano Banana 2</option>
-              <option value="gemini-2.5-flash-image">Nano Banana</option>
-              <option value="imagen-4.0-generate-001">
-              <option value="imagen-4.0-fast-generate-001">
-            </datalist>
-          </label>
-          <label>
-            <span>Modelo de texto (mejorar prompts)</span>
+            <span>Modelo de texto de Gemini (director)</span>
             <input id="textModel" list="textModels" value="gemini-2.5-flash">
             <datalist id="textModels">
               <option value="gemini-2.5-flash">
@@ -76,18 +137,13 @@
           </label>
         </div>
         <label class="check">
-          <input id="enhance" type="checkbox" checked>
-          <span>Usar el modelo de texto para convertir cada escena en un prompt visual detallado</span>
-        </label>
-        <label class="check">
           <input id="noText" type="checkbox" checked>
           <span>Pedir imágenes sin texto, subtítulos ni marcas de agua</span>
         </label>
         <div class="row">
-          <button id="loadModels" type="button" class="ghost">Cargar modelos disponibles con mi key</button>
+          <button id="loadModels" type="button" class="ghost">Cargar modelos de Gemini disponibles con mi key</button>
           <span id="modelsStatus" class="hint"></span>
         </div>
-        <p class="hint">Los modelos <code>gemini-*-image</code> aceptan imágenes de referencia de tus personajes (mejor consistencia). Los <code>imagen-*</code> solo usan la descripción de texto.</p>
       </details>
     </section>
 
@@ -161,7 +217,7 @@
         <span class="ts"></span>
         <p class="text"></p>
         <p class="who"></p>
-        <details><summary>Prompt</summary><pre class="prompt"></pre></details>
+        <details><summary>Prompt (editable)</summary><textarea class="prompt" rows="6" spellcheck="false"></textarea><p class="hint small">Edítalo y pulsa Regenerar para usar tu versión.</p></details>
         <div class="row">
           <button type="button" class="ghost regen">Regenerar</button>
           <a class="btnlike ghost dl" download hidden>Descargar</a>
