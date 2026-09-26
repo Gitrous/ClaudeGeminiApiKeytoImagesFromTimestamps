@@ -41,7 +41,8 @@ Las líneas sin timestamp se añaden a la escena anterior.
 
 ## Modelos
 
-- Imagen: por defecto `gemini-2.5-flash-image` (admite referencias). También `imagen-4.0-*` (solo texto).
+- Imagen: por defecto `gemini-3.1-flash-image` (Nano Banana 2, admite referencias). También `gemini-2.5-flash-image` (Nano Banana) e `imagen-4.0-*` (solo texto).
+- Generar imágenes por API requiere tener la facturación activada en la key (el plan gratuito tiene límite 0 para modelos de imagen).
 - Texto (opcional, convierte cada escena en un prompt visual detallado): `gemini-2.5-flash`.
 - El botón **Cargar modelos disponibles** lista los modelos a los que tiene acceso tu key.
 

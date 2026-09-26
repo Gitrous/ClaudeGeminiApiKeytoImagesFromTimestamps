@@ -5,6 +5,8 @@
   const CFG_KEY = 'tsimg.config.v1';
   const KEY_KEY = 'tsimg.apikey';
   const MAX_REFS = 3;
+  const CFG_VERSION = 2;
+  const DEFAULT_IMAGE_MODEL = 'gemini-3.1-flash-image';
 
   const $ = (sel, el = document) => el.querySelector(sel);
   const els = {
@@ -34,6 +36,7 @@
 
   function currentConfig() {
     return {
+      v: CFG_VERSION,
       stylePreset,
       style: els.style.value,
       imageModel: els.imageModel.value.trim(),
@@ -52,7 +55,9 @@
     if (cfg.style != null) els.style.value = cfg.style;
     stylePreset = STYLE_PRESETS.some((p) => p.id === cfg.stylePreset) ? cfg.stylePreset : 'custom';
     renderPresets();
-    if (cfg.imageModel) els.imageModel.value = cfg.imageModel;
+    // v1 configs saved the old default model; move them to the new default.
+    const oldDefault = !(cfg.v >= 2) && cfg.imageModel === 'gemini-2.5-flash-image';
+    els.imageModel.value = cfg.imageModel && !oldDefault ? cfg.imageModel : DEFAULT_IMAGE_MODEL;
     if (cfg.textModel) els.textModel.value = cfg.textModel;
     if (cfg.aspect) els.aspect.value = cfg.aspect;
     if (cfg.concurrency) els.concurrency.value = cfg.concurrency;
