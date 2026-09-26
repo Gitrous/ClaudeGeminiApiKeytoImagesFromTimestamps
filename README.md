@@ -6,7 +6,7 @@ Web estática que genera **una imagen por cada timestamp** de tu guion usando **
 
 1. Abre `index.html` en el navegador (o publícala con GitHub Pages; no necesita servidor).
 2. Pega tu API key de Gemini ([Google AI Studio](https://aistudio.google.com/apikey)).
-3. Elige una **plantilla de estilo** (Cartoon, Anime, Realista, Microsoft Paint, Animación 3D, Voxel, Pixel art, Cómic, Acuarela, Plastilina, Boceto a lápiz, Dibujo infantil, Low poly, Terror oscuro) o **Personalizado** para escribir el tuyo. Con una plantilla puedes añadir detalles extra de estilo.
+3. Elige una **plantilla de estilo** (Cartoon, Anime, Realista, Microsoft Paint, Figuras de palitos, Animación 3D, Voxel, Pixel art, Cómic, Acuarela, Plastilina, Boceto a lápiz, Dibujo infantil, Low poly, Terror oscuro) o **Personalizado** para escribir el tuyo. Con una plantilla puedes añadir detalles extra de estilo.
    Las plantillas están en `presets.js`; añadir una nueva es añadir un objeto a la lista.
 4. Define los personajes del canal:
    - **Nombre** y **alias**: se usan para detectar en qué escenas aparece cada personaje.

@@ -12,6 +12,8 @@ window.STYLE_PRESETS = [
     prompt: 'photorealistic, cinematic photograph, natural lighting, shallow depth of field, 35mm lens, highly detailed realistic textures' },
   { id: 'paint', label: 'Microsoft Paint', icon: '🖌️',
     prompt: 'crude drawing made in Microsoft Paint with a mouse, jagged aliased lines, flat default Paint palette colors, paint bucket fills, wobbly shapes, amateurish naive and intentionally funny look, plain white background' },
+  { id: 'stickman', label: 'Figuras de palitos', icon: '🕴️',
+    prompt: 'stick figure drawing, characters drawn as simple black stickmen with round circle heads and single-line arms, legs and body, minimal dot eyes and simple line mouth for expressions, clean thick black lines on plain white background, minimalist webcomic style, few simple props, clear readable poses and exaggerated gestures' },
   { id: '3d', label: 'Animación 3D', icon: '🧸',
     prompt: '3D animated feature film style, soft global illumination, rounded appealing character shapes, expressive faces, polished family movie render' },
   { id: 'voxel', label: 'Voxel / bloques', icon: '🧱',
