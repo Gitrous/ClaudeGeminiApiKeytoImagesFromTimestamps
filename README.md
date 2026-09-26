@@ -2,6 +2,15 @@
 
 Web estática que genera **una imagen por cada timestamp** de tu guion usando **tu propia API key de Gemini**, manteniendo siempre los **personajes fijos de tu canal**.
 
+## Publicarla en GitHub Pages
+
+1. **Settings → Pages → Build and deployment → Source: Deploy from a branch.**
+2. Rama `claude/jolly-pasteur-e8bk03` (o la rama donde esté la web), carpeta `/ (root)` → **Save**.
+3. En 1-2 minutos estará en `https://gitrous.github.io/ClaudeGeminiApiKeytoImagesFromTimestamps/`.
+
+GitHub Pages solo funciona en repos **públicos** con el plan gratuito (en privados requiere GitHub Pro).
+La web no contiene ninguna API key: cada usuario pone la suya en su navegador.
+
 ## Cómo usarla
 
 1. Abre `index.html` en el navegador (o publícala con GitHub Pages; no necesita servidor).
