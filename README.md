@@ -14,6 +14,15 @@ Web estática que genera **una imagen por cada timestamp** de tu guion, mantenie
 GitHub Pages solo funciona en repos **públicos** con el plan gratuito (en privados requiere GitHub Pro).
 La web no contiene ninguna API key: cada usuario pone la suya en su navegador.
 
+## Codespaces: actualización automática
+
+El repo incluye `.devcontainer/`. Cada vez que abres o recargas el Codespace, `.devcontainer/start.sh`:
+
+1. Trae lo último de la rama principal del repo (`git pull --ff-only --autostash`, sin perder cambios locales).
+2. Reinicia el servidor web en el puerto **8000** (log en `/tmp/web-server.log`).
+
+Tras añadirlo por primera vez hay que reconstruir el Codespace una vez: **Ctrl+Shift+P → "Codespaces: Rebuild Container"**.
+
 ## Cómo usarla
 
 1. Abre `index.html` en el navegador (o publícala con GitHub Pages; no necesita servidor).
