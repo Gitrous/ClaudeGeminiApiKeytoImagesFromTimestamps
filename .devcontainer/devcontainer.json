@@ -4,11 +4,15 @@
   // Every time the Codespace is opened or the browser tab is reloaded:
   // pull the latest default branch and (re)start the web server on port 8000.
   "postAttachCommand": "bash .devcontainer/start.sh",
-  "forwardPorts": [8000],
+  "forwardPorts": [8000, 7860],
   "portsAttributes": {
     "8000": {
       "label": "Web",
       "onAutoForward": "openBrowserOnce"
+    },
+    "7860": {
+      "label": "Web + Stable Diffusion local",
+      "onAutoForward": "notify"
     }
   }
 }

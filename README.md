@@ -23,6 +23,23 @@ El repo incluye `.devcontainer/`. Cada vez que abres o recargas el Codespace, `.
 
 Tras añadirlo por primera vez hay que reconstruir el Codespace una vez: **Ctrl+Shift+P → "Codespaces: Rebuild Container"**.
 
+## Stable Diffusion local (gratis e ilimitado)
+
+`local-sd/` contiene un servidor de Stable Diffusion adaptado de la plantilla `templates/image-gen-api` de
+[free-ai-bible](https://github.com/abbosaliboev/free-ai-bible) (MIT). Sirve también la web, así que página y API comparten dirección.
+
+```bash
+bash local-sd/start.sh
+```
+
+1. La primera vez instala PyTorch y las dependencias, y al generar la primera imagen descarga el modelo (~2-4 GB).
+2. Abre la web desde el puerto **7860** (en Codespaces: pestaña **Ports → 7860**) y elige el motor **Stable Diffusion local**.
+3. Modelo por defecto: `stabilityai/sd-turbo` (1-2 pasos, usable sin GPU). Otro modelo: `SD_MODEL=nombre/modelo bash local-sd/start.sh`.
+
+Sin GPU, cada imagen tarda de segundos a un minuto según la máquina. SD-Turbo lee solo ~75 tokens de prompt,
+así que el director escribe prompts más cortos con este motor. Revisa la licencia del modelo que uses
+(SD-Turbo: Stability AI Community License).
+
 ## Cómo usarla
 
 1. Abre `index.html` en el navegador (o publícala con GitHub Pages; no necesita servidor).
@@ -30,6 +47,7 @@ Tras añadirlo por primera vez hay que reconstruir el Codespace una vez: **Ctrl+
    - **Pollinations**: gratis con key de [enter.pollinations.ai](https://enter.pollinations.ai) (saldo diario gratuito). Modelo por defecto `black-forest-labs/flux.1-schnell`. Sin key se intenta el modo anónimo (una imagen cada ~15 s), que puede no estar disponible.
    - **Hugging Face**: gratis con un [token](https://huggingface.co/settings/tokens) (créditos mensuales limitados). Modelo por defecto `black-forest-labs/FLUX.1-schnell`.
    - **Gemini Nano Banana**: mejor calidad y admite imágenes de referencia, pero Google exige facturación activada (el plan gratuito tiene límite 0 para imágenes).
+   - **Stable Diffusion local**: gratis, ilimitado y sin keys; se ejecuta en tu Codespace o PC (ver abajo).
 3. Pega tu API key de Gemini ([Google AI Studio](https://aistudio.google.com/apikey)) para que Gemini escriba los prompts leyendo todo el guion. El modelo de texto tiene cuota gratuita. Sin key, se usa el texto de cada escena tal cual.
 4. Elige una **plantilla de estilo** (Cartoon, Anime, Realista, Microsoft Paint, Figuras de palitos, Animación 3D, Voxel, Pixel art, Cómic, Acuarela, Plastilina, Boceto a lápiz, Dibujo infantil, Low poly, Terror oscuro) o **Personalizado** para escribir el tuyo. Con una plantilla puedes añadir detalles extra de estilo.
    Las plantillas están en `presets.js`; añadir una nueva es añadir un objeto a la lista.

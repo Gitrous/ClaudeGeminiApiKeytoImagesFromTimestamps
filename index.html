@@ -34,6 +34,10 @@
           <span class="pIcon" aria-hidden="true">🍌</span>
           <span><b>Gemini Nano Banana</b><small>Mejor calidad · requiere facturación</small></span>
         </button>
+        <button type="button" class="provider" data-provider="local" role="radio">
+          <span class="pIcon" aria-hidden="true">🖥️</span>
+          <span><b>Stable Diffusion local</b><small>Gratis e ilimitado · en tu Codespace o PC</small></span>
+        </button>
       </div>
 
       <div class="pBlock" data-for="pollinations">
@@ -75,6 +79,18 @@
           </label>
         </div>
         <p class="hint">Crea un token gratis (tipo <i>Read</i> o con permiso <i>Inference</i>) en <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">huggingface.co/settings/tokens</a>. Las cuentas gratuitas tienen pocos créditos al mes.</p>
+      </div>
+
+      <div class="pBlock" data-for="local">
+        <label>
+          <span>Dirección del servidor local</span>
+          <input id="localUrl" placeholder="automática">
+        </label>
+        <div class="row">
+          <button id="localCheck" type="button" class="ghost">Comprobar servidor</button>
+          <span id="localStatus" class="hint"></span>
+        </div>
+        <p class="hint">Arráncalo con <code>bash local-sd/start.sh</code> y abre la web desde el puerto <b>7860</b> (en Codespaces: pestaña Ports → 7860). Déjalo en blanco para usar la dirección automática. Sin GPU cada imagen tarda de segundos a un minuto.</p>
       </div>
 
       <div class="pBlock" data-for="gemini">

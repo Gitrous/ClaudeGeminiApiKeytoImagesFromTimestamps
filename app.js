@@ -5,7 +5,7 @@
   const CFG_KEY = 'tsimg.config.v1';
   const KEY_KEY = 'tsimg.apikey';
   const EXTRA_KEYS_KEY = 'tsimg.keys';
-  const PROVIDERS = ['pollinations', 'huggingface', 'gemini'];
+  const PROVIDERS = ['pollinations', 'huggingface', 'gemini', 'local'];
   const DIRECTOR_CHUNK = 40;
   const MAX_REFS = 3;
   const CFG_VERSION = 4;
@@ -19,7 +19,7 @@
     concurrency: $('#concurrency'), enhance: $('#enhance'), noText: $('#noText'),
     loadModels: $('#loadModels'), modelsStatus: $('#modelsStatus'),
     providers: $('#providers'), pollKey: $('#pollKey'), pollModel: $('#pollModel'),
-    hfKey: $('#hfKey'), hfModel: $('#hfModel'),
+    hfKey: $('#hfKey'), hfModel: $('#hfModel'), localUrl: $('#localUrl'),
     style: $('#style'), stylePresets: $('#stylePresets'), presetPrompt: $('#presetPrompt'),
     styleLabel: $('#styleLabel'), characters: $('#characters'), addChar: $('#addChar'),
     exportCfg: $('#exportCfg'), importCfg: $('#importCfg'),
@@ -47,6 +47,7 @@
       provider,
       pollModel: els.pollModel.value.trim(),
       hfModel: els.hfModel.value.trim(),
+      localUrl: els.localUrl.value.trim(),
       stylePreset,
       style: els.style.value,
       imageModel: els.imageModel.value.trim(),
@@ -74,6 +75,7 @@
     const oldPollDefault = !(cfg.v >= 4) && cfg.pollModel === 'flux';
     els.pollModel.value = cfg.pollModel && !oldPollDefault ? cfg.pollModel : DEFAULT_POLL_MODEL;
     if (cfg.hfModel) els.hfModel.value = cfg.hfModel;
+    if (cfg.localUrl != null) els.localUrl.value = cfg.localUrl;
     renderProvider();
     if (cfg.aspect) els.aspect.value = cfg.aspect;
     if (cfg.concurrency) els.concurrency.value = cfg.concurrency;
@@ -309,6 +311,7 @@
       styleText() ? `- End every prompt with this visual style: ${styleText()}.` : '',
       els.noText.checked ? '- Never ask for text, captions, letters or watermarks in the image.' : '',
       external ? '- The image model is a diffusion model (FLUX-like): prefer clear descriptive phrases over instructions; put the most important subject first.' : '',
+      provider === 'local' ? '- HARD LIMIT: keep each prompt under 55 words; this model only reads about 75 tokens.' : '',
       cast.length ? 'Fixed characters of the channel:\n' + cast.map(castLine).join('\n') : 'There are no fixed characters.',
       'Return JSON: an array with one object per scene: {"index": scene number, "characters": [names of fixed characters in the image], "prompt": "..."}.',
     ].filter(Boolean).join('\n');
@@ -415,7 +418,7 @@
     let msg = `HTTP ${res.status}`;
     try {
       const t = await res.text();
-      try { const j = JSON.parse(t); msg = j.error?.message || j.error || j.message || t || msg; } catch { msg = t || msg; }
+      try { const j = JSON.parse(t); msg = j.error?.message || j.error || j.detail || j.message || t || msg; } catch { msg = t || msg; }
     } catch { /* keep status */ }
     return typeof msg === 'string' ? msg.slice(0, 300) : JSON.stringify(msg).slice(0, 300);
   }
@@ -547,9 +550,59 @@
     }
   }
 
+  // ---------- local Stable Diffusion (local-sd/app.py) ----------
+  const LOCAL_SIZES = {
+    '9:16': [512, 896], '16:9': [896, 512], '1:1': [512, 512],
+    '4:5': [512, 640], '3:4': [512, 680], '4:3': [680, 512],
+  };
+
+  function localBase() {
+    const custom = els.localUrl.value.trim().replace(/\/+$/, '').replace(/\/sd(\/generate)?$/, '');
+    if (custom) return custom;
+    // Served by local-sd itself (Codespaces port 7860 or localhost): same origin.
+    if (location.protocol.startsWith('http') && !location.hostname.endsWith('github.io') && location.port !== '8000') return location.origin;
+    return 'http://localhost:7860';
+  }
+
+  const localHelp = (base) => `No se encontró el servidor de Stable Diffusion en ${base}.\n\n` +
+    'Arráncalo con: bash local-sd/start.sh\n' +
+    'y abre la web desde el puerto 7860 (en Codespaces: pestaña Ports → 7860), no desde el 8000.';
+
+  async function localImage(prompt, signal, onStatus) {
+    const base = localBase();
+    const [width, height] = LOCAL_SIZES[els.aspect.value] || LOCAL_SIZES['1:1'];
+    const seed = Math.floor(Math.random() * 2 ** 31);
+    for (let attempt = 0; ; attempt++) {
+      onStatus('Generando en tu servidor local…');
+      let res;
+      try {
+        res = await fetch(`${base}/sd/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, width, height, seed }),
+          signal,
+        });
+      } catch (err) {
+        if (err.name === 'AbortError') throw err;
+        throw fatal(localHelp(base));
+      }
+      if (res.ok) return asImage(res);
+      if (res.status === 503 && attempt < 90) {
+        onStatus('El modelo se está descargando o cargando (solo la primera vez)…');
+        await sleep(10000, signal);
+        continue;
+      }
+      if ([404, 405, 501].includes(res.status)) throw fatal(localHelp(base));
+      const msg = await responseError(res);
+      if (res.status === 500 && /cargar el modelo/.test(msg)) throw fatal(msg);
+      throw new Error(`Servidor local: ${msg}`);
+    }
+  }
+
   async function generateImage(prompt, cast, signal, onStatus = () => {}) {
     if (provider === 'pollinations') return pollinationsImage(prompt, signal, onStatus);
     if (provider === 'huggingface') return huggingfaceImage(prompt, signal, onStatus);
+    if (provider === 'local') return localImage(prompt, signal, onStatus);
     onStatus('Generando imagen…');
     const img = await geminiImage(prompt, cast, signal);
     return b64ToBlob(img.data, img.mimeType);
@@ -831,10 +884,25 @@
     try { applyConfig(JSON.parse(await file.text())); save(); } catch (err) { alert('Archivo no válido: ' + err.message); }
     e.target.value = '';
   });
-  [els.apiKey, els.pollKey, els.hfKey, els.pollModel, els.hfModel, els.style, els.imageModel, els.textModel, els.script].forEach((el) => el.addEventListener('input', save));
+  [els.apiKey, els.pollKey, els.hfKey, els.pollModel, els.hfModel, els.localUrl, els.style, els.imageModel, els.textModel, els.script].forEach((el) => el.addEventListener('input', save));
   [els.aspect, els.concurrency, els.enhance, els.noText].forEach((el) => el.addEventListener('change', save));
   els.script.addEventListener('input', renderPreview);
   els.loadModels.addEventListener('click', loadModels);
+  $('#localCheck').addEventListener('click', async () => {
+    const st = $('#localStatus');
+    const base = localBase();
+    st.textContent = `Comprobando ${base}…`;
+    try {
+      const res = await fetch(`${base}/sd/health`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const h = await res.json();
+      st.textContent = h.error ? `Error al cargar ${h.model}: ${h.error}`
+        : h.ready ? `✔ Listo: ${h.model} en ${h.device === 'cuda' ? 'GPU' : 'CPU'}`
+          : `Conectado. Descargando/cargando ${h.model}… vuelve a comprobar en un rato.`;
+    } catch {
+      st.textContent = `No responde en ${base}. Arráncalo con: bash local-sd/start.sh`;
+    }
+  });
   $('#pollLoad').addEventListener('click', async () => {
     const st = $('#pollStatus');
     st.textContent = 'Cargando…';
