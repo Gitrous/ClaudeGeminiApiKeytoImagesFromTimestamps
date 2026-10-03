@@ -1,6 +1,8 @@
 {
   "name": "Timestamps a Imágenes",
-  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  // Small Python image: the full "universal" image is >10 GB and made new
+  // Codespaces take many minutes to start. Python is all this project needs.
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
   // Every time the Codespace is opened or the browser tab is reloaded:
   // pull the latest default branch and (re)start the web server on port 8000.
   "postAttachCommand": "bash .devcontainer/start.sh",
