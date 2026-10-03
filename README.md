@@ -49,6 +49,9 @@ así que el director escribe prompts más cortos con este motor. Revisa la licen
    - **Gemini Nano Banana**: mejor calidad y admite imágenes de referencia, pero Google exige facturación activada (el plan gratuito tiene límite 0 para imágenes).
    - **Stable Diffusion local**: gratis, ilimitado y sin keys; se ejecuta en tu Codespace o PC (ver abajo).
 3. Pega tu API key de Gemini ([Google AI Studio](https://aistudio.google.com/apikey)) para que Gemini escriba los prompts leyendo todo el guion. El modelo de texto tiene cuota gratuita. Sin key, se usa el texto de cada escena tal cual.
+   El director usa por defecto `gemini-3.1-flash-lite-preview` (~500 peticiones gratis al día; `gemini-2.5-flash` solo tiene ~20).
+   Si un modelo se queda sin cuota o no existe, la web prueba sola el siguiente (3.1 Flash-Lite → 2.5 Flash-Lite → 2.5 Flash).
+   Límites tomados de [free-llm-api-resources](https://github.com/raullenchai/free-llm-api-resources), que los obtiene de las cuotas reales de Google.
 4. Elige una **plantilla de estilo** (Cartoon, Anime, Realista, Microsoft Paint, Figuras de palitos, Animación 3D, Voxel, Pixel art, Cómic, Acuarela, Plastilina, Boceto a lápiz, Dibujo infantil, Low poly, Terror oscuro) o **Personalizado** para escribir el tuyo. Con una plantilla puedes añadir detalles extra de estilo.
    Las plantillas están en `presets.js`; añadir una nueva es añadir un objeto a la lista.
 5. Define los personajes del canal:

@@ -8,9 +8,13 @@
   const PROVIDERS = ['pollinations', 'huggingface', 'gemini', 'local'];
   const DIRECTOR_CHUNK = 40;
   const MAX_REFS = 3;
-  const CFG_VERSION = 4;
+  const CFG_VERSION = 5;
   const DEFAULT_POLL_MODEL = 'black-forest-labs/flux.1-schnell';
   const DEFAULT_IMAGE_MODEL = 'gemini-3.1-flash-image';
+  // Director models, most free quota first (free tier, per Google's quotas:
+  // 3.1 Flash-Lite ~500 req/day, 2.5 Flash-Lite and 2.5 Flash ~20 req/day).
+  const TEXT_MODEL_FALLBACKS = ['gemini-3.1-flash-lite-preview', 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'];
+  const DEFAULT_TEXT_MODEL = TEXT_MODEL_FALLBACKS[0];
 
   const $ = (sel, el = document) => el.querySelector(sel);
   const els = {
@@ -69,7 +73,9 @@
     // v1 configs saved the old default model; move them to the new default.
     const oldDefault = !(cfg.v >= 2) && cfg.imageModel === 'gemini-2.5-flash-image';
     els.imageModel.value = cfg.imageModel && !oldDefault ? cfg.imageModel : DEFAULT_IMAGE_MODEL;
-    if (cfg.textModel) els.textModel.value = cfg.textModel;
+    // Before v5 the default director was gemini-2.5-flash (only ~20 free requests/day).
+    const oldTextDefault = !(cfg.v >= 5) && cfg.textModel === 'gemini-2.5-flash';
+    els.textModel.value = cfg.textModel && !oldTextDefault ? cfg.textModel : DEFAULT_TEXT_MODEL;
     provider = PROVIDERS.includes(cfg.provider) ? cfg.provider : 'pollinations';
     // v3 configs saved the old default alias 'flux'; move them to the new default.
     const oldPollDefault = !(cfg.v >= 4) && cfg.pollModel === 'flux';
@@ -235,7 +241,7 @@
   const escapeHtml = (s) => s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
   // ---------- Gemini API ----------
-  async function callApi(path, body, signal) {
+  async function callApi(path, body, signal, { retry = true } = {}) {
     const key = els.apiKey.value.trim();
     for (let attempt = 0; ; attempt++) {
       const res = await fetch(`${API}/${path}`, {
@@ -252,20 +258,48 @@
         const model = (msg.match(/model:\s*([\w.-]+)/) || [])[1] || path.split(/[/:]/)[1];
         const err = new Error(
           `Tu API key no tiene cuota para el modelo "${model}" (límite 0 en el plan gratuito). ` +
-          'Google solo permite generar imágenes por API con la facturación activada: ' +
-          'actívala en https://aistudio.google.com/apikey (Set up billing) o usa una key de un proyecto con facturación.');
+          (/image/i.test(model)
+            ? 'Google solo permite generar imágenes por API con la facturación activada: ' +
+              'actívala en https://aistudio.google.com/apikey (Set up billing) o usa una key de un proyecto con facturación.'
+            : 'Prueba con otro modelo de texto.'));
         err.fatal = true;
+        err.status = res.status;
         throw err;
       }
       const retryable = res.status === 429 || res.status >= 500;
-      if (retryable && attempt < 3) {
+      if (retry && retryable && attempt < 3) {
         const hinted = parseFloat((msg.match(/retry in ([\d.]+)s/i) || [])[1]);
         const wait = hinted ? Math.min(hinted * 1000 + 500, 65000) : 2000 * 2 ** attempt;
         await sleep(wait, signal);
         continue;
       }
-      throw new Error(msg);
+      const err = new Error(msg);
+      err.status = res.status;
+      throw err;
     }
+  }
+
+  // Calls the director model; if it is out of free quota or does not exist,
+  // tries the next model in TEXT_MODEL_FALLBACKS and remembers the one that worked.
+  async function generateText(body, signal) {
+    const chosen = els.textModel.value.trim() || DEFAULT_TEXT_MODEL;
+    const models = [...new Set([chosen, ...TEXT_MODEL_FALLBACKS])];
+    let lastErr;
+    for (const [i, model] of models.entries()) {
+      try {
+        const last = i === models.length - 1;
+        const data = await callApi(`${modelPath(model)}:generateContent`, body, signal, { retry: last });
+        if (model !== chosen) { els.textModel.value = model; save(); }
+        return data;
+      } catch (err) {
+        if (err.name === 'AbortError') throw err;
+        lastErr = err;
+        // Quota exhausted (429) or unknown model (404/400 "not found"): try the next one.
+        const skippable = err.status === 429 || err.status === 404 || (err.status === 400 && /not found|not supported/i.test(err.message));
+        if (!skippable) throw err;
+      }
+    }
+    throw lastErr;
   }
 
   function sleep(ms, signal) {
@@ -322,7 +356,7 @@
       const ask = scenes.length > DIRECTOR_CHUNK
         ? `FULL SCRIPT (for context):\n${fullScript}\n\nWrite prompts ONLY for scenes #${from + 1} to #${to}.`
         : `FULL SCRIPT:\n${fullScript}`;
-      const data = await callApi(`${modelPath(els.textModel.value.trim())}:generateContent`, {
+      const data = await generateText({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: 'user', parts: [{ text: ask }] }],
         generationConfig: {
@@ -370,7 +404,7 @@
       styleText() ? `Estilo visual del canal: ${styleText()}` : '',
     ].filter(Boolean).join('\n');
 
-    const data = await callApi(`${modelPath(els.textModel.value.trim())}:generateContent`, {
+    const data = await generateText({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: sceneText }] }],
       generationConfig: { temperature: 0.9 },
